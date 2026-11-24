@@ -5,8 +5,8 @@ const STORAGE_KEY_SESSION = "inci_tani_auth_session_v1";
 
 // Isi dengan Project URL dan Publishable / anon key dari Supabase kamu
 const CLOUD_DEFAULT = {
-  url: "",
-  anonKey: ""
+  url: "https://svcsyhuvmwvtymareyxu.supabase.co",
+  anonKey: "sb_publishable_0H2j4ltoC9aqs25kDhFohw_hC6oOg7a"
 };
 
 let daftarToko = [];
