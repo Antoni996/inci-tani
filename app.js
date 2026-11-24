@@ -5,8 +5,8 @@ const STORAGE_KEY_SESSION = "inci_tani_auth_session_v1";
 
 // Isi dengan Project URL dan Publishable / anon key dari Supabase kamu
 const CLOUD_DEFAULT = {
-  url: "https://svcsyhuvmwvtymareyxu.supabase.co",
-  anonKey: "sb_publishable_0H2j4ltoC9aqs25kDhFohw_hC6oOg7a"
+  url: "",
+  anonKey: ""
 };
 
 let daftarToko = [];
@@ -591,8 +591,8 @@ function susunKeteranganPerubahan(dataLama, dataBaru) {
   const hargaTokoLama = dataLama.hargaToko || {};
   const hargaTokoBaru = dataBaru.hargaToko || {};
   daftarToko.forEach(t => {
-    const lama = Number(hargaTokoLama[t.id] || 0);
-    const baru = Number(hargaTokoBaru[t.id] || 0);
+    const lama = Number(hargaTokoLama[t.id] || hargaTokoLama[String(t.id)] || 0);
+    const baru = Number(hargaTokoBaru[t.id] || hargaTokoBaru[String(t.id)] || 0);
     if (lama !== baru) {
       daftarPerubahan.push(`Harga ${t.nama} dari ${formatRupiah(lama)} menjadi ${formatRupiah(baru)}`);
     }
@@ -609,7 +609,7 @@ function renderFormToko(nilaiHarga = {}) {
   container.innerHTML = "";
 
   daftarToko.forEach(t => {
-    const raw = nilaiHarga[t.id];
+    const raw = nilaiHarga[t.id] ?? nilaiHarga[String(t.id)];
     const val = raw !== undefined && raw !== null && raw !== ""
       ? Number(raw).toLocaleString("id-ID")
       : "";
@@ -691,6 +691,7 @@ async function simpanBarang() {
   const waktuSekarang = new Date().toISOString();
   const satuanUkuranSimpan = kategori === "Pupuk" ? satuanPupuk : null;
   const idTargetEdit = idSedangDiedit;
+  const detailSedangAktif = idDetailAktif !== null && String(idDetailAktif) === String(idTargetEdit);
 
   try {
     sedangMemuat = true;
@@ -733,7 +734,7 @@ async function simpanBarang() {
       sedangMemuat = false;
       await muatDataDariCloud(false);
 
-      if (idDetailAktif !== null && String(idDetailAktif) === String(idTargetEdit)) {
+      if (detailSedangAktif) {
         await bukaDetail(idTargetEdit);
       }
     } else {
