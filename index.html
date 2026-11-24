@@ -17,22 +17,56 @@
       background: #f8fafc;
       color: #0f172a;
     }
+    .topbar-utama {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 14px;
+      padding: 14px 18px;
+      margin-bottom: 14px;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+    }
     .header-blok {
-      margin-bottom: 16px;
+      margin: 0;
+      min-width: 0;
+    }
+    .judul-row {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
     }
     .judul-utama {
       margin: 0;
-      font-size: 26px;
+      font-size: 25px;
       font-weight: 700;
-      line-height: 1.25;
+      line-height: 1.2;
       color: #0f172a;
+      letter-spacing: -0.01em;
+    }
+    .badge-kategori-header {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 9px;
+      font-size: 11.5px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #1e40af;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 999px;
     }
     .subjudul-utama {
       margin: 4px 0 0;
-      font-size: 17px;
+      font-size: 15px;
       font-weight: 500;
       line-height: 1.35;
-      color: #475569;
+      color: #64748b;
     }
     .login-wrap {
       max-width: 420px;
@@ -104,10 +138,11 @@
       margin-bottom: 0;
     }
     .modal-section-title {
-      margin: 0 0 8px;
-      font-size: 16px;
-      font-weight: 700;
-      color: #1e293b;
+      margin: 0 0 10px;
+      font-size: 17.5px;
+      font-weight: 600;
+      line-height: 1.35;
+      color: #64748b;
     }
     .status-sync-bar {
       display: flex;
@@ -188,7 +223,7 @@
       justify-content: flex-end;
       gap: 10px;
       align-items: center;
-      margin-bottom: 12px;
+      margin: 0;
     }
     input, select, button {
       padding: 11px 14px;
@@ -451,11 +486,20 @@
     .col-toko { width: 96px; max-width: 112px; text-align: right; }
     .col-aksi { width: 86px; text-align: center; }
 
-    @media (max-width: 600px) {
+    @media (max-width: 640px) {
       body { padding: 14px 12px 96px; }
-      .judul-utama { font-size: 24px; }
-      .subjudul-utama { font-size: 16px; }
-      .toolbar { gap: 8px; }
+      .topbar-utama {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 14px;
+        gap: 12px;
+      }
+      .judul-utama { font-size: 23px; }
+      .subjudul-utama { font-size: 14.5px; }
+      .toolbar {
+        justify-content: flex-end;
+        gap: 8px;
+      }
       .toolbar button { padding: 10px 12px; font-size: 15px; }
       .tab-btn {
         padding: 7px 12px;
@@ -536,9 +580,10 @@
     }
     .detail-section-title {
       margin: 0 0 12px;
-      font-size: 16px;
-      font-weight: 700;
-      color: #1e293b;
+      font-size: 17.5px;
+      font-weight: 600;
+      line-height: 1.35;
+      color: #64748b;
     }
     .detail-list {
       display: grid;
@@ -854,26 +899,31 @@
 
   <!-- HALAMAN UTAMA (TOOLBAR & TABEL) -->
   <div id="halaman-utama" style="display: none;">
-    <div class="header-blok">
-      <h1 class="judul-utama">Inci Tani</h1>
-      <h2 class="subjudul-utama">Catatan Harga Obat dan Pupuk</h2>
-    </div>
+    <header class="topbar-utama">
+      <div class="header-blok">
+        <div class="judul-row">
+          <h1 class="judul-utama">Inci Tani</h1>
+          <span class="badge-kategori-header">Obat &amp; Pupuk</span>
+        </div>
+        <p class="subjudul-utama">Catatan Harga Obat dan Pupuk</p>
+      </div>
 
-    <!-- Toolbar Utama (Selalu di Kanan) -->
-    <div class="toolbar">
-      <button type="button" class="btn-sekunder btn-icon" onclick="bukaModalToko()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M3 9l1.5-5h15L21 9"></path>
-          <path d="M3 9v2a2.5 2.5 0 0 0 5 0v-2"></path>
-          <path d="M8 9v2a2.5 2.5 0 0 0 5 0v-2"></path>
-          <path d="M13 9v2a2.5 2.5 0 0 0 5 0v-2"></path>
-          <path d="M18 9v2a2.5 2.5 0 0 0 3-1.4"></path>
-          <path d="M5 13v7h14v-7"></path>
-        </svg>
-        <span>Kelola Toko</span>
-      </button>
-      <button type="button" class="btn-sekunder" onclick="prosesLogout()">Keluar</button>
-    </div>
+      <!-- Toolbar Utama (Selalu di Kanan) -->
+      <div class="toolbar">
+        <button type="button" class="btn-sekunder btn-icon" onclick="bukaModalToko()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 9l1.5-5h15L21 9"></path>
+            <path d="M3 9v2a2.5 2.5 0 0 0 5 0v-2"></path>
+            <path d="M8 9v2a2.5 2.5 0 0 0 5 0v-2"></path>
+            <path d="M13 9v2a2.5 2.5 0 0 0 5 0v-2"></path>
+            <path d="M18 9v2a2.5 2.5 0 0 0 3-1.4"></path>
+            <path d="M5 13v7h14v-7"></path>
+          </svg>
+          <span>Kelola Toko</span>
+        </button>
+        <button type="button" class="btn-sekunder" onclick="prosesLogout()">Keluar</button>
+      </div>
+    </header>
 
     <!-- Bar Status Penyimpanan Lokal + Sinkronisasi Cloud -->
     <div class="status-sync-bar">
@@ -983,13 +1033,6 @@
               <input type="text" id="nama" placeholder="Contoh: Arjuna">
             </div>
             <div class="form-field">
-              <label for="kategori">Kategori</label>
-              <select id="kategori" onchange="sinkronkanFormPupuk()">
-                <option value="Obat">Obat</option>
-                <option value="Pupuk">Pupuk</option>
-              </select>
-            </div>
-            <div class="form-field">
               <label id="label-ukuran-modal" for="ukuran">Ukuran</label>
               <div id="wadah-ukuran-pupuk" class="ukuran-pupuk-grid" style="display: none;">
                 <input type="text" id="ukuran-pupuk-angka" placeholder="Contoh: 1" disabled>
@@ -999,6 +1042,13 @@
                 </select>
               </div>
               <input type="text" id="ukuran" placeholder="Contoh: 250">
+            </div>
+            <div class="form-field">
+              <label for="kategori">Kategori</label>
+              <select id="kategori" onchange="sinkronkanFormPupuk()">
+                <option value="Obat">Obat</option>
+                <option value="Pupuk">Pupuk</option>
+              </select>
             </div>
             <div class="form-field">
               <label for="hargaJual">Harga Jual</label>

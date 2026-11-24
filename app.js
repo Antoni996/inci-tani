@@ -5,7 +5,7 @@ const STORAGE_KEY_SESSION = "inci_tani_auth_session_v1";
 
 // Isi dengan Project URL dan Publishable / anon key dari Supabase kamu
 const CLOUD_DEFAULT = {
-  url: "https://your-project.supabase.co", // <-- Ganti dengan URL Supabase kamu
+  url: "https://svcsyhuvmwvtymareyxu.supabase.co",
   anonKey: "sb_publishable_0H2j4ltoC9aqs25kDhFohw_hC6oOg7a"
 };
 
@@ -562,6 +562,19 @@ function normalisasiUkuran(uk, kategori = "Obat", satuanPupuk = "kg") {
   return bersih === "" ? "-" : bersih;
 }
 
+function formatUkuranDenganSatuanTampil(item) {
+  const kat = item.kategori || "Obat";
+  const ukNorm = normalisasiUkuran(item.ukuran, kat, item.satuanUkuran);
+  if (!ukNorm || ukNorm === "-") return "-";
+  if (kat === "Pupuk") {
+    return ukNorm;
+  }
+  if (/^\d+(?:[.,]\d+)?$/.test(ukNorm)) {
+    return `${ukNorm}ml`;
+  }
+  return ukNorm;
+}
+
 function sinkronkanFormPupuk() {
   const selectKat = document.getElementById("kategori");
   const kat = selectKat ? selectKat.value : kategoriAktif;
@@ -1068,20 +1081,19 @@ async function bukaDetail(id) {
   idDetailAktif = item.id;
   const katItem = item.kategori || KATEGORI_STATIS[0];
   const labelNama = ambilLabelNamaKategori(katItem);
-  const ukuranTampil = normalisasiUkuran(item.ukuran, katItem, item.satuanUkuran);
+  const ukuranTampil = formatUkuranDenganSatuanTampil(item);
+  const judulHeaderDetail = ukuranTampil && ukuranTampil !== "-"
+    ? `${item.nama} (${ukuranTampil})`
+    : item.nama;
 
   document.getElementById("halaman-utama").style.display = "none";
   document.getElementById("halaman-detail").style.display = "block";
-  document.getElementById("detail-nama").textContent = item.nama;
+  document.getElementById("detail-nama").textContent = judulHeaderDetail;
 
   document.getElementById("detail-info-utama").innerHTML = `
     <div class="detail-box">
       <div class="detail-label">${escapeHtml(labelNama)}</div>
       <div class="detail-val">${escapeHtml(item.nama)}</div>
-    </div>
-    <div class="detail-box">
-      <div class="detail-label">Kategori</div>
-      <div class="detail-val">${escapeHtml(katItem)}</div>
     </div>
     <div class="detail-box">
       <div class="detail-label">Ukuran</div>
@@ -1090,6 +1102,10 @@ async function bukaDetail(id) {
     <div class="detail-box">
       <div class="detail-label">Harga Jual</div>
       <div class="detail-val">${formatRupiah(item.hargaJual)}</div>
+    </div>
+    <div class="detail-box">
+      <div class="detail-label">Kategori</div>
+      <div class="detail-val">${escapeHtml(katItem)}</div>
     </div>
   `;
 
