@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inci Tani - Catatan Harga Obat dan Pupuk</title>
+  <link rel="manifest" href="manifest.json">
+  <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: sans-serif;
+      font-size: 16px;
+      padding: 16px 16px 96px;
+      max-width: 1100px;
+      margin: auto;
+      background: #f8fafc;
+      color: #0f172a;
+    }
+    .header-blok {
+      margin-bottom: 16px;
+    }
+    .judul-utama {
+      margin: 0;
+      font-size: 26px;
+      font-weight: 700;
+      line-height: 1.25;
+      color: #0f172a;
+    }
+    .subjudul-utama {
+      margin: 4px 0 0;
+      font-size: 17px;
+      font-weight: 500;
+      line-height: 1.35;
+      color: #475569;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .modal-header-divider {
+      margin: 0;
+      padding: 18px 20px 14px;
+      border-bottom: 1px solid #cbd5e1;
+      font-size: 20px;
+      background: #fff;
+      flex-shrink: 0;
+    }
+    .modal-body {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 16px 20px;
+      -webkit-overflow-scrolling: touch;
+    }
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      padding: 14px 20px;
+      background: #fff;
+      border-top: 1px solid #cbd5e1;
+      flex-shrink: 0;
+      z-index: 5;
+    }
+    .modal-section-box {
+      background: #f8fafc;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+    .modal-section-box:last-child {
+      margin-bottom: 0;
+    }
+    .modal-section-title {
+      margin: 0 0 8px;
+      font-size: 16px;
+      font-weight: 700;
+      color: #1e293b;
+    }
+    .status-sync-bar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      margin-bottom: 14px;
+      background: #fff;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 14px;
+      color: #334155;
+    }
+    .status-sync-teks strong {
+      color: #0f172a;
+    }
+    .form-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 0;
+    }
+    .form-field label {
+      display: block;
+      font-size: 15px;
+      font-weight: 600;
+      color: #334155;
+      margin-bottom: 5px;
+    }
+    .form-field input,
+    .form-field select {
+      width: 100%;
+      min-width: 0;
+      background: #fff;
+    }
+    .ukuran-pupuk-grid {
+      display: grid;
+      grid-template-columns: 1fr 130px;
+      gap: 8px;
+      align-items: center;
+    }
+    #satuan-ukuran-pupuk {
+      background: #fff;
+      color: #0f172a;
+      opacity: 1;
+      pointer-events: auto;
+      cursor: pointer;
+    }
+    .toko-inputs {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-top: 0;
+    }
+    .toko-harga-box {
+      background: #fff;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .toko-harga-box label {
+      display: block;
+      font-size: 15px;
+      font-weight: 600;
+      color: #1e293b;
+      margin-bottom: 6px;
+    }
+    .toko-harga-box input {
+      width: 100%;
+      min-width: 0;
+      background: #fff;
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    input, select, button {
+      padding: 11px 14px;
+      font-size: 16px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+    }
+    input:disabled,
+    select:disabled {
+      background: #f1f5f9;
+      color: #94a3b8;
+      border-color: #cbd5e1;
+      cursor: not-allowed;
+      opacity: 0.75;
+    }
+    button {
+      cursor: pointer;
+      background: #2563eb;
+      color: #fff;
+      border-color: #2563eb;
+      font-weight: 600;
+    }
+    button:hover { opacity: 0.92; }
+    .btn-sekunder {
+      background: #fff;
+      color: #0f172a;
+      border-color: #cbd5e1;
+    }
+    .btn-kecil {
+      padding: 8px 12px;
+      font-size: 15px;
+    }
+    .btn-hapus {
+      background: #dc2626;
+      border-color: #dc2626;
+      color: #fff;
+    }
+
+    .tabel-card {
+      background: #fff;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      margin-bottom: 18px;
+    }
+    .tab-bar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: flex-end;
+      justify-content: flex-start;
+      overflow-x: auto;
+      gap: 4px;
+      padding: 10px 10px 0;
+      background: #e2e8f0;
+      border-radius: 8px 8px 0 0;
+      -webkit-overflow-scrolling: touch;
+    }
+    .tabel-card:not(.tampil-pupuk) .tab-bar {
+      border-bottom: 2px solid #93c5fd;
+    }
+    .tabel-card.tampil-pupuk .tab-bar {
+      border-bottom: 2px solid #94a3b8;
+    }
+
+    .tab-btn {
+      flex: 0 0 auto;
+      order: 1;
+      background: #cbd5e1;
+      color: #475569;
+      border: 1px solid #94a3b8;
+      border-bottom: none;
+      padding: 8px 14px;
+      border-radius: 9px 9px 0 0;
+      font-size: 14px;
+      font-weight: 600;
+      position: relative;
+      margin-bottom: -2px;
+      transition: background-color 0.15s ease, color 0.15s ease;
+    }
+    .tab-btn:hover {
+      background: #f1f5f9;
+      color: #0f172a;
+    }
+
+    .tabel-card:not(.tampil-pupuk) .tab-btn.aktif {
+      background: #dbeafe;
+      color: #1e3a8a;
+      border: 2px solid #93c5fd;
+      border-bottom: 2px solid #dbeafe;
+      padding: 10px 20px;
+      font-size: 17px;
+      font-weight: 700;
+      z-index: 3;
+    }
+    .tabel-card.tampil-pupuk .tab-btn.aktif {
+      background: #e2e8f0;
+      color: #1e293b;
+      border: 2px solid #94a3b8;
+      border-bottom: 2px solid #e2e8f0;
+      padding: 10px 20px;
+      font-size: 17px;
+      font-weight: 700;
+      z-index: 3;
+    }
+
+    .btn-tambah-tab {
+      flex: 0 0 auto;
+      order: 99;
+      margin-left: auto;
+      margin-bottom: 7px;
+      padding: 8px 13px;
+      font-size: 14px;
+      border-radius: 8px;
+      white-space: nowrap;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      background: #fff;
+      border-radius: 0 0 8px 8px;
+      -webkit-overflow-scrolling: touch;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+    }
+    th, td {
+      border: 1px solid #cbd5e1;
+      padding: 10px 11px;
+      text-align: left;
+      font-size: 15px;
+    }
+    td {
+      white-space: nowrap;
+    }
+    th {
+      z-index: 10;
+      border-top: none;
+      font-weight: 700;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      line-height: 1.25;
+      vertical-align: middle;
+    }
+    .header-ket-biasa {
+      font-weight: 400;
+    }
+
+    #tabel-utama.mode-kat-obat th {
+      background: #dbeafe;
+      color: #1e3a8a;
+      border-color: #93c5fd;
+      border-top: none;
+    }
+    #tabel-utama.mode-kat-pupuk th {
+      background: #e2e8f0;
+      color: #1e293b;
+      border-color: #94a3b8;
+      border-top: none;
+    }
+
+    #tabel-utama.mode-kat-obat #tabel-barang tr:nth-child(odd) td {
+      background: #ffffff;
+      color: #0f172a;
+    }
+    #tabel-utama.mode-kat-obat #tabel-barang tr:nth-child(even) td {
+      background: #f1f5f9;
+      color: #1d4ed8;
+    }
+
+    #tabel-utama.mode-kat-pupuk #tabel-barang tr:nth-child(odd) td {
+      background: #ffffff;
+      color: #0f172a;
+      border-color: #cbd5e1;
+    }
+    #tabel-utama.mode-kat-pupuk #tabel-barang tr:nth-child(even) td {
+      background: #e2e8f0;
+      color: #334155;
+      border-color: #cbd5e1;
+    }
+
+    .teks-rata-kanan-kiri {
+      display: block;
+      width: 100%;
+      text-align: inherit;
+    }
+    tr.baris-klik { cursor: pointer; }
+    #tabel-utama.mode-kat-obat tr.baris-klik:nth-child(odd):hover td,
+    #tabel-utama.mode-kat-obat tr.baris-klik:nth-child(even):hover td {
+      background: #eff6ff;
+      color: inherit;
+    }
+    #tabel-utama.mode-kat-pupuk tr.baris-klik:nth-child(odd):hover td,
+    #tabel-utama.mode-kat-pupuk tr.baris-klik:nth-child(even):hover td {
+      background: #cbd5e1;
+      color: #0f172a;
+    }
+
+    .bottom-sticky-wrap {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 30;
+      padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px));
+      background: rgba(248, 250, 252, 0.94);
+      backdrop-filter: blur(8px);
+      border-top: 1px solid #cbd5e1;
+      pointer-events: none;
+    }
+    .bottom-sticky-bar {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 10px;
+      background: #fff;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
+      pointer-events: auto;
+    }
+    #cari {
+      flex: 1 1 auto;
+      width: 100%;
+      min-width: 0;
+      font-size: 16px;
+      padding: 12px 14px;
+    }
+    #filter-huruf {
+      flex: 0 0 124px;
+      width: 124px;
+      font-size: 15px;
+      padding: 11px 10px;
+      background: #f8fafc;
+    }
+
+    .col-nama { min-width: 140px; text-align: left; }
+    .col-ukuran { width: 92px; max-width: 112px; text-align: center; }
+    .col-harga { width: 102px; max-width: 118px; text-align: right; }
+    .col-toko { width: 96px; max-width: 112px; text-align: right; }
+    .col-aksi { width: 86px; text-align: center; }
+
+    @media (max-width: 600px) {
+      body { padding: 14px 12px 96px; }
+      .judul-utama { font-size: 24px; }
+      .subjudul-utama { font-size: 16px; }
+      .toolbar { gap: 8px; }
+      .toolbar button { padding: 10px 12px; font-size: 15px; }
+      .tab-btn {
+        padding: 7px 12px;
+        font-size: 13px;
+      }
+      .tabel-card:not(.tampil-pupuk) .tab-btn.aktif,
+      .tabel-card.tampil-pupuk .tab-btn.aktif {
+        padding: 9px 16px;
+        font-size: 16px;
+      }
+      th, td {
+        padding: 9px 7px;
+        font-size: 15px;
+      }
+      td {
+        white-space: normal;
+      }
+      th {
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        line-height: 1.25;
+      }
+      .col-nama { min-width: 0; text-align: left; }
+      .col-ukuran { width: 78px; max-width: 92px; text-align: center; }
+      .col-harga { width: 90px; max-width: 102px; text-align: right; }
+      .col-toko { width: 84px; max-width: 96px; text-align: right; }
+      .col-aksi { display: none; }
+
+      .mode-kat-obat .col-harga { display: none; }
+      .mode-kat-obat .col-toko { display: table-cell; }
+
+      .mode-kat-pupuk .col-harga { display: table-cell; }
+      .mode-kat-pupuk .col-toko { display: none; }
+
+      .bottom-sticky-wrap {
+        padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+      }
+      .bottom-sticky-bar {
+        padding: 8px;
+        gap: 8px;
+      }
+      #cari {
+        padding: 12px 12px;
+      }
+      #filter-huruf {
+        flex: 0 0 106px;
+        width: 106px;
+        padding: 11px 8px;
+        font-size: 14px;
+      }
+    }
+
+    #halaman-detail { display: none; }
+    .detail-sticky-header {
+      position: sticky;
+      top: 0;
+      z-index: 25;
+      margin: -16px -16px 14px;
+      padding: 12px 16px;
+      background: rgba(248, 250, 252, 0.96);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid #cbd5e1;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+    }
+    @media (max-width: 600px) {
+      .detail-sticky-header {
+        margin: -14px -12px 14px;
+        padding: 10px 12px;
+      }
+    }
+    .detail-section-box {
+      background: #f8fafc;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 14px;
+      margin-top: 16px;
+    }
+    .detail-section-title {
+      margin: 0 0 12px;
+      font-size: 16px;
+      font-weight: 700;
+      color: #1e293b;
+    }
+    .detail-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin: 0;
+    }
+    .detail-box {
+      background: #e2e8f0;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 12px;
+      cursor: default;
+      user-select: none;
+    }
+    .detail-label { font-size: 14px; color: #64748b; }
+    .detail-val { font-size: 18px; font-weight: 700; color: #475569; margin-top: 5px; }
+
+    .log-waktu-box {
+      margin-top: 20px;
+      border: 2px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 12px;
+      background: #f8fafc;
+    }
+    .log-waktu-judul {
+      font-size: 15px;
+      font-weight: 700;
+      color: #1e293b;
+      margin: 0 0 10px;
+    }
+    .log-waktu-scroll {
+      max-height: 230px;
+      overflow: auto;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      background: #f1f5f9;
+    }
+    .tabel-log-waktu {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .tabel-log-waktu th,
+    .tabel-log-waktu td {
+      border: 1px solid #cbd5e1;
+      padding: 8px 10px;
+      font-size: 14px;
+      white-space: normal;
+      vertical-align: top;
+    }
+    .tabel-log-waktu td {
+      background: #e2e8f0;
+      color: #475569;
+    }
+    .tabel-log-waktu th {
+      position: static;
+      background: #cbd5e1;
+      color: #1e293b;
+    }
+
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.5);
+      justify-content: center;
+      align-items: center;
+      padding: 12px;
+      z-index: 100;
+    }
+    .modal-backdrop.aktif { display: flex; }
+    .modal-box {
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+      border-radius: 10px;
+      padding: 0;
+      width: 100%;
+      max-width: 540px;
+      max-height: 88vh;
+      overflow: hidden;
+    }
+
+    .toko-section-box {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 14px;
+      max-width: 100%;
+      overflow: hidden;
+    }
+    .toko-section-box:last-child {
+      margin-bottom: 0;
+    }
+    .toko-section-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #1e293b;
+      margin: 0 0 6px;
+    }
+    .toko-section-hint {
+      font-size: 14px;
+      color: #64748b;
+      margin: 0 0 10px;
+    }
+    .toko-tambah-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      width: 100%;
+    }
+    .toko-tambah-row input {
+      flex: 1 1 auto;
+      min-width: 0;
+      width: 100%;
+      background: #fff;
+    }
+    .toko-tambah-row button {
+      flex: 0 0 auto;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    .toko-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 10px;
+      width: 100%;
+    }
+    .toko-row:last-child {
+      margin-bottom: 0;
+    }
+    .toko-row input {
+      flex: 1 1 auto;
+      min-width: 0;
+      width: 100%;
+      background: #fff;
+    }
+    .toko-row button {
+      flex: 0 0 auto;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 600px) {
+      .modal-body {
+        padding: 12px 14px;
+      }
+      .modal-section-box {
+        padding: 12px;
+      }
+      .toko-section-box {
+        padding: 10px;
+      }
+      .toko-tambah-row,
+      .toko-row {
+        gap: 6px;
+      }
+      .toko-tambah-row input,
+      .toko-row input {
+        padding: 10px 10px;
+        font-size: 15px;
+      }
+      .toko-tambah-row button {
+        padding: 10px 11px;
+        font-size: 14px;
+      }
+      .toko-row .btn-kecil {
+        padding: 8px 10px;
+        font-size: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HALAMAN UTAMA (TOOLBAR & TABEL) -->
+  <div id="halaman-utama">
+    <div class="header-blok">
+      <h1 class="judul-utama">Inci Tani</h1>
+      <h2 class="subjudul-utama">Catatan Harga Obat dan Pupuk</h2>
+    </div>
+
+    <!-- Toolbar Utama (Selalu di Kanan) -->
+    <div class="toolbar">
+      <button type="button" class="btn-sekunder" onclick="bukaModalToko()">Kelola Toko</button>
+    </div>
+
+    <!-- Bar Status Penyimpanan Lokal + Sinkronisasi Cloud -->
+    <div class="status-sync-bar">
+      <div class="status-sync-teks" id="status-sync-teks">
+        Lokal: <strong>Aktif</strong> &bull; Cloud: <strong>Belum diatur</strong>
+      </div>
+      <button type="button" class="btn-sekunder btn-kecil" onclick="sinkronkanSekarang(true)">Sinkronkan Sekarang</button>
+    </div>
+
+    <!-- Kartu Tabel dengan Tab Kategori Menempel & Sticky -->
+    <div id="kartu-tabel-utama" class="tabel-card">
+      <div id="tab-kategori" class="tab-bar" role="tablist" aria-label="Kategori Barang"></div>
+      <div class="table-wrap">
+        <table id="tabel-utama" class="mode-kat-obat">
+          <thead>
+            <tr id="header-tabel"></tr>
+          </thead>
+          <tbody id="tabel-barang"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Search Bar & Filter Huruf A-Z Tetap Menempel di Bagian Bawah -->
+    <div class="bottom-sticky-wrap">
+      <div class="bottom-sticky-bar">
+        <input type="text" id="cari" placeholder="Cari nama barang..." oninput="tampilkanBarang()" onkeyup="tampilkanBarang()">
+        <select id="filter-huruf" onchange="tampilkanBarang()" aria-label="Filter huruf awal">
+          <option value="">Huruf: Semua</option>
+          <option value="A">A</option>
+          <option value="B">B</option>
+          <option value="C">C</option>
+          <option value="D">D</option>
+          <option value="E">E</option>
+          <option value="F">F</option>
+          <option value="G">G</option>
+          <option value="H">H</option>
+          <option value="I">I</option>
+          <option value="J">J</option>
+          <option value="K">K</option>
+          <option value="L">L</option>
+          <option value="M">M</option>
+          <option value="N">N</option>
+          <option value="O">O</option>
+          <option value="P">P</option>
+          <option value="Q">Q</option>
+          <option value="R">R</option>
+          <option value="S">S</option>
+          <option value="T">T</option>
+          <option value="U">U</option>
+          <option value="V">V</option>
+          <option value="W">W</option>
+          <option value="X">X</option>
+          <option value="Y">Y</option>
+          <option value="Z">Z</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- HALAMAN DETAIL BARANG -->
+  <div id="halaman-detail">
+    <div class="detail-sticky-header">
+      <button type="button" class="btn-sekunder" onclick="tutupDetail()">&lt;- Kembali ke Daftar</button>
+    </div>
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <h2 id="detail-nama" style="margin: 0; font-size: 22px;">Detail Barang</h2>
+        <div>
+          <button type="button" onclick="editDariDetail()">Edit</button>
+          <button type="button" class="btn-hapus" id="detail-btn-hapus">Hapus</button>
+        </div>
+      </div>
+
+      <div class="detail-section-box">
+        <div class="detail-section-title">Informasi Barang &amp; Harga Jual</div>
+        <div class="detail-list" id="detail-info-utama"></div>
+      </div>
+
+      <div class="detail-section-box">
+        <div class="detail-section-title">Harga di Tiap Toko</div>
+        <div class="detail-list" id="detail-harga-toko"></div>
+      </div>
+
+      <div class="log-waktu-box" id="detail-log-waktu"></div>
+    </div>
+  </div>
+
+  <!-- MODAL POP-UP TAMBAH / EDIT BARANG -->
+  <div id="modal-barang" class="modal-backdrop">
+    <div class="modal-box">
+      <h3 id="judul-form-barang" class="modal-header-divider">Tambah Barang</h3>
+
+      <div class="modal-body">
+        <div class="modal-section-box">
+          <div class="modal-section-title">Informasi Barang &amp; Harga Jual</div>
+          <div class="form-stack">
+            <div class="form-field">
+              <label for="nama">Nama Barang</label>
+              <input type="text" id="nama" placeholder="Contoh: Arjuna">
+            </div>
+            <div class="form-field">
+              <label for="kategori">Kategori</label>
+              <select id="kategori" onchange="sinkronkanFormPupuk()">
+                <option value="Obat">Obat</option>
+                <option value="Pupuk">Pupuk</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label id="label-ukuran-modal" for="ukuran">Ukuran</label>
+              <div id="wadah-ukuran-pupuk" class="ukuran-pupuk-grid" style="display: none;">
+                <input type="text" id="ukuran-pupuk-angka" placeholder="Contoh: 1" disabled>
+                <select id="satuan-ukuran-pupuk" aria-label="Kategori ukuran pupuk" disabled>
+                  <option value="kg">kg</option>
+                  <option value="sack">sack</option>
+                </select>
+              </div>
+              <input type="text" id="ukuran" placeholder="Contoh: 250">
+            </div>
+            <div class="form-field">
+              <label for="hargaJual">Harga Jual</label>
+              <input type="text" id="hargaJual" inputmode="numeric" placeholder="0" oninput="formatInputRibuan(this)">
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-section-box">
+          <div class="modal-section-title">Harga di Tiap Toko</div>
+          <div id="input-harga-toko" class="toko-inputs"></div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-sekunder" onclick="tutupModalBarang()">Batal</button>
+        <button type="button" id="btn-simpan-barang" onclick="simpanBarang()">Simpan Barang</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL POP-UP LIST & EDIT TOKO -->
+  <div id="modal-toko" class="modal-backdrop">
+    <div class="modal-box">
+      <h3 class="modal-header-divider">Kelola Toko</h3>
+
+      <div class="modal-body">
+        <div class="toko-section-box">
+          <div class="toko-section-title">Tambah Toko Baru</div>
+          <p class="toko-section-hint">Ketik nama toko baru lalu klik + Tambah.</p>
+          <div class="toko-tambah-row">
+            <input type="text" id="nama-toko-baru" placeholder="Contoh: Toko C">
+            <button type="button" onclick="tambahTokoBaru()">+ Tambah</button>
+          </div>
+        </div>
+
+        <div class="toko-section-box">
+          <div class="toko-section-title">Daftar Toko Tersimpan</div>
+          <p class="toko-section-hint">Ubah nama langsung pada kolom atau hapus toko, lalu klik Simpan Toko.</p>
+          <div id="list-edit-toko"></div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-sekunder" onclick="tutupModalToko()">Tutup</button>
+        <button type="button" onclick="simpanPerubahanToko()">Simpan Toko</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
