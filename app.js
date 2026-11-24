@@ -5,7 +5,7 @@ const STORAGE_KEY_SESSION = "inci_tani_auth_session_v1";
 
 // Isi dengan Project URL dan Publishable / anon key dari Supabase kamu
 const CLOUD_DEFAULT = {
-  url: "https://svcsyhuvmwvtymareyxu.supabase.co",
+  url: "https://your-project.supabase.co", // <-- Ganti dengan URL Supabase kamu
   anonKey: "sb_publishable_0H2j4ltoC9aqs25kDhFohw_hC6oOg7a"
 };
 
@@ -21,6 +21,111 @@ let waktuSyncTerakhir = null;
 let sedangMemuat = false;
 let sedangMenyimpanBarang = false;
 let sesiAuth = null;
+let resolverModalPesan = null;
+
+function setIkonModalPesan(bahaya = false) {
+  const badge = document.getElementById("pesan-modal-ikon");
+  if (!badge) return;
+  badge.classList.toggle("tipe-peringatan", Boolean(bahaya));
+  if (bahaya) {
+    badge.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+        <line x1="12" y1="9" x2="12" y2="13"></line>
+        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+      </svg>
+    `;
+  } else {
+    badge.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="8" x2="12" y2="12"></line>
+        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+      </svg>
+    `;
+  }
+}
+
+function tutupModalPesanInternal(hasil) {
+  const backdrop = document.getElementById("modal-pesan");
+  if (backdrop) {
+    backdrop.classList.remove("aktif");
+  }
+  const fn = resolverModalPesan;
+  resolverModalPesan = null;
+  if (typeof fn === "function") {
+    fn(hasil);
+  }
+}
+
+function tampilkanAlert(pesan, opsi = {}) {
+  return new Promise(resolve => {
+    if (resolverModalPesan) {
+      tutupModalPesanInternal(false);
+    }
+    const judul = opsi.judul || "Informasi";
+    const teksOk = opsi.teksOk || "Oke";
+    const bahaya = Boolean(opsi.bahaya);
+
+    document.getElementById("pesan-modal-judul").textContent = judul;
+    document.getElementById("pesan-modal-isi").textContent = String(pesan || "");
+    setIkonModalPesan(bahaya);
+
+    const btnBatal = document.getElementById("pesan-btn-batal");
+    const btnOk = document.getElementById("pesan-btn-ok");
+
+    btnBatal.style.display = "none";
+    btnBatal.onclick = null;
+
+    btnOk.textContent = teksOk;
+    btnOk.className = bahaya ? "btn-hapus" : "";
+    btnOk.onclick = () => {
+      tutupModalPesanInternal(true);
+      resolve();
+    };
+
+    resolverModalPesan = () => resolve();
+    lepasFokusAktif();
+    document.getElementById("modal-pesan").classList.add("aktif");
+  });
+}
+
+function tampilkanKonfirmasi(pesan, opsi = {}) {
+  return new Promise(resolve => {
+    if (resolverModalPesan) {
+      tutupModalPesanInternal(false);
+    }
+    const judul = opsi.judul || "Konfirmasi";
+    const teksYa = opsi.teksYa || "Oke";
+    const teksBatal = opsi.teksBatal || "Batal";
+    const bahaya = Boolean(opsi.bahaya);
+
+    document.getElementById("pesan-modal-judul").textContent = judul;
+    document.getElementById("pesan-modal-isi").textContent = String(pesan || "");
+    setIkonModalPesan(bahaya);
+
+    const btnBatal = document.getElementById("pesan-btn-batal");
+    const btnOk = document.getElementById("pesan-btn-ok");
+
+    btnBatal.style.display = "inline-block";
+    btnBatal.textContent = teksBatal;
+    btnBatal.onclick = () => {
+      tutupModalPesanInternal(false);
+      resolve(false);
+    };
+
+    btnOk.textContent = teksYa;
+    btnOk.className = bahaya ? "btn-hapus" : "";
+    btnOk.onclick = () => {
+      tutupModalPesanInternal(true);
+      resolve(true);
+    };
+
+    resolverModalPesan = val => resolve(Boolean(val));
+    lepasFokusAktif();
+    document.getElementById("modal-pesan").classList.add("aktif");
+  });
+}
 
 function ambilKonfigurasiCloud() {
   const defaultUrl = String(CLOUD_DEFAULT.url || "").trim().replace(/\/+$/, "");
@@ -172,7 +277,7 @@ async function prosesLogin(event) {
     simpanSesiAuth({
       access_token: data.access_token,
       refresh_token: data.refresh_token,
-      expires_at: data.expires_at || (Math.floor(Date.now() / 1000) + Number(dataBaru?.expires_in || data.expires_in || 3600)),
+      expires_at: data.expires_at || (Math.floor(Date.now() / 1000) + Number(data.expires_in || 3600)),
       email: (data.user && data.user.email) || email
     });
 
@@ -328,7 +433,10 @@ async function muatDataDariCloud(tampilkanPesan = false) {
   if (!cloudSudahDiatur()) {
     perbaruiStatusSync();
     if (tampilkanPesan) {
-      alert("Konfigurasi Supabase (CLOUD_DEFAULT) belum diisi di app.js.");
+      await tampilkanAlert("Konfigurasi Supabase (CLOUD_DEFAULT) belum diisi di app.js.", {
+        judul: "Konfigurasi Belum Lengkap",
+        bahaya: true
+      });
     }
     return false;
   }
@@ -341,7 +449,10 @@ async function muatDataDariCloud(tampilkanPesan = false) {
   if (!navigator.onLine) {
     perbaruiStatusSync("Offline");
     if (tampilkanPesan) {
-      alert("Perangkat sedang offline. Aplikasi langsung cloud membutuhkan koneksi internet.");
+      await tampilkanAlert("Perangkat sedang offline. Aplikasi langsung cloud membutuhkan koneksi internet.", {
+        judul: "Koneksi Terputus",
+        bahaya: true
+      });
     }
     return false;
   }
@@ -371,13 +482,18 @@ async function muatDataDariCloud(tampilkanPesan = false) {
     perbaruiStatusSync("Tersinkron");
 
     if (tampilkanPesan) {
-      alert("Data berhasil dimuat dari Supabase.");
+      await tampilkanAlert("Data berhasil dimuat dari Supabase.", {
+        judul: "Sinkronisasi Berhasil"
+      });
     }
     return true;
   } catch (err) {
     perbaruiStatusSync("Gagal memuat");
     if (tampilkanPesan) {
-      alert(`Gagal memuat data dari Supabase: ${err.message}`);
+      await tampilkanAlert(`Gagal memuat data dari Supabase: ${err.message}`, {
+        judul: "Gagal Sinkronisasi",
+        bahaya: true
+      });
     }
     return false;
   } finally {
@@ -669,11 +785,13 @@ async function simpanBarang() {
   const hargaJual = ambilAngkaMurni(document.getElementById("hargaJual").value);
 
   if (!nama || isNaN(hargaJual)) {
-    alert("Mohon isi minimal Nama Barang dan Harga Jual.");
+    await tampilkanAlert("Mohon isi minimal Nama Barang dan Harga Jual.", {
+      judul: "Data Belum Lengkap",
+      bahaya: true
+    });
     return;
   }
 
-  // Ambil snapshot ID edit sebelum menutup modal
   const idTargetEdit = idSedangDiedit;
   const modeEdit = idTargetEdit !== null && idTargetEdit !== undefined && String(idTargetEdit) !== "";
   const detailSedangAktif = modeEdit && idDetailAktif !== null && String(idDetailAktif) === String(idTargetEdit);
@@ -689,7 +807,10 @@ async function simpanBarang() {
 
   if (duplikat) {
     const labelItem = ambilLabelNamaKategori(kategori);
-    alert(`${labelItem} "${nama}" dengan ukuran "${ukuran}" sudah ada. Gunakan ukuran yang berbeda jika ingin menambah nama yang sama.`);
+    await tampilkanAlert(
+      `${labelItem} "${nama}" dengan ukuran "${ukuran}" sudah ada. Gunakan ukuran yang berbeda jika ingin menambah nama yang sama.`,
+      { judul: "Data Sudah Ada", bahaya: true }
+    );
     return;
   }
 
@@ -771,7 +892,10 @@ async function simpanBarang() {
     }
   } catch (err) {
     perbaruiStatusSync("Gagal simpan");
-    alert(`Gagal menyimpan ke Supabase: ${err.message}`);
+    await tampilkanAlert(`Gagal menyimpan ke Supabase: ${err.message}`, {
+      judul: "Gagal Menyimpan",
+      bahaya: true
+    });
   } finally {
     sedangMenyimpanBarang = false;
     if (btnSimpan) btnSimpan.disabled = false;
@@ -1005,20 +1129,29 @@ function editDariDetail() {
 }
 
 async function hapusBarang(id) {
-  if (!confirm("Hapus barang ini?")) return false;
+  const yakin = await tampilkanKonfirmasi("Hapus barang ini secara permanen?", {
+    judul: "Hapus Barang",
+    teksYa: "Hapus",
+    teksBatal: "Batal",
+    bahaya: true
+  });
+  if (!yakin) return false;
 
   try {
     sedangMemuat = true;
     perbaruiStatusSync("Menghapus...");
     await requestSupabase("barang", "DELETE", null, `?id=eq.${encodeURIComponent(id)}`);
-    sedangMemuat = false;
     await muatDataDariCloud(false);
     return true;
   } catch (err) {
-    sedangMemuat = false;
     perbaruiStatusSync("Gagal hapus");
-    alert(`Gagal menghapus barang di Supabase: ${err.message}`);
+    await tampilkanAlert(`Gagal menghapus barang di Supabase: ${err.message}`, {
+      judul: "Gagal Menghapus",
+      bahaya: true
+    });
     return false;
+  } finally {
+    sedangMemuat = false;
   }
 }
 
@@ -1047,7 +1180,7 @@ function buatPesanKonfirmasiTokoBaru(namaBaruList) {
   ];
   const pesan = opsiPesan[indexPesanKonfirmasi % opsiPesan.length];
   indexPesanKonfirmasi += 1;
-  return `${pesan}\n(Oke = Simpan | Batal = Buang)`;
+  return pesan;
 }
 
 function bukaModalToko() {
@@ -1073,7 +1206,11 @@ async function tutupModalToko() {
       .filter(t => t.isBaru)
       .map(t => (t.nama || "").trim() || "(Tanpa nama)");
 
-    const inginSimpan = confirm(buatPesanKonfirmasiTokoBaru(namaBaruList));
+    const inginSimpan = await tampilkanKonfirmasi(buatPesanKonfirmasiTokoBaru(namaBaruList), {
+      judul: "Toko Baru Belum Disimpan",
+      teksYa: "Simpan",
+      teksBatal: "Buang"
+    });
 
     if (inginSimpan) {
       await simpanPerubahanToko();
@@ -1098,12 +1235,15 @@ function renderListEditToko() {
   });
 }
 
-function tambahTokoBaru() {
+async function tambahTokoBaru() {
   sinkronkanInputDraftToko();
   const inputBaru = document.getElementById("nama-toko-baru");
   const nama = inputBaru.value.trim();
   if (!nama) {
-    alert("Masukkan nama toko terlebih dahulu.");
+    await tampilkanAlert("Masukkan nama toko terlebih dahulu.", {
+      judul: "Nama Toko Kosong",
+      bahaya: true
+    });
     return;
   }
 
@@ -1116,13 +1256,22 @@ function tambahTokoBaru() {
   renderListEditToko();
 }
 
-function hapusToko(id) {
+async function hapusToko(id) {
   sinkronkanInputDraftToko();
   if (draftToko.length <= 1) {
-    alert("Minimal harus ada 1 toko.");
+    await tampilkanAlert("Minimal harus ada 1 toko.", {
+      judul: "Tidak Bisa Dihapus",
+      bahaya: true
+    });
     return;
   }
-  if (!confirm("Hapus toko ini dari daftar?")) return;
+  const yakin = await tampilkanKonfirmasi("Hapus toko ini dari daftar?", {
+    judul: "Hapus Toko",
+    teksYa: "Hapus",
+    teksBatal: "Batal",
+    bahaya: true
+  });
+  if (!yakin) return;
   draftToko = draftToko.filter(t => String(t.id) !== String(id));
   renderListEditToko();
 }
@@ -1177,7 +1326,10 @@ async function simpanPerubahanToko() {
   } catch (err) {
     sedangMemuat = false;
     perbaruiStatusSync("Gagal simpan");
-    alert(`Gagal menyimpan perubahan toko ke Supabase: ${err.message}`);
+    await tampilkanAlert(`Gagal menyimpan perubahan toko ke Supabase: ${err.message}`, {
+      judul: "Gagal Menyimpan Toko",
+      bahaya: true
+    });
   }
 }
 
