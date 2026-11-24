@@ -1,15 +1,9 @@
-const db = new Dexie("DatabaseHargaTokoV2");
-db.version(2).stores({
-  barang: "++id, nama, kategori, ukuran, hargaJual, dibuatPada, dieditPada",
-  toko: "++id, nama"
-});
-
 const KATEGORI_STATIS = ["Obat", "Pupuk"];
 const TOKO_DEFAULT = ["Toko A", "Toko B"];
 const STORAGE_KEY_CLOUD = "inci_tani_cloud_config_v1";
 const STORAGE_KEY_SESSION = "inci_tani_auth_session_v1";
 
-// WAJIB diisi dengan Project URL dan Publishable / anon key dari Supabase kamu sebelum push ke GitHub
+// Isi dengan Project URL dan Publishable / anon key dari Supabase kamu
 const CLOUD_DEFAULT = {
   url: "https://svcsyhuvmwvtymareyxu.supabase.co",
   anonKey: "sb_publishable_0H2j4ltoC9aqs25kDhFohw_hC6oOg7a"
@@ -24,7 +18,7 @@ let kategoriAktif = KATEGORI_STATIS[0];
 let semuaBarangCache = [];
 let indexPesanKonfirmasi = 0;
 let waktuSyncTerakhir = null;
-let sedangSinkron = false;
+let sedangMemuat = false;
 let sesiAuth = null;
 
 function ambilKonfigurasiCloud() {
@@ -183,7 +177,7 @@ async function prosesLogin(event) {
 
     document.getElementById("login-password").value = "";
     tampilkanHalamanAplikasi();
-    await muatToko();
+    await muatDataDariCloud(false);
   } catch (err) {
     if (elPesan) {
       elPesan.textContent = err.message || "Gagal masuk.";
@@ -211,6 +205,8 @@ async function prosesLogout() {
     } catch (e) {}
   }
   simpanSesiAuth(null);
+  daftarToko = [];
+  semuaBarangCache = [];
   tampilkanHalamanLogin("");
 }
 
@@ -223,10 +219,10 @@ function perbaruiStatusSync(labelStatus = null) {
 
   let cloudTeks = "<strong>Belum diatur</strong>";
   if (terhubung) {
-    if (sedangSinkron) {
-      cloudTeks = "<strong>Sedang sinkron...</strong>";
+    if (sedangMemuat) {
+      cloudTeks = "<strong>Memuat data...</strong>";
     } else if (!online) {
-      cloudTeks = "<strong>Offline</strong> (menunggu internet)";
+      cloudTeks = "<strong>Offline</strong> (butuh internet)";
     } else if (labelStatus) {
       cloudTeks = `<strong>${escapeHtml(labelStatus)}</strong>`;
     } else {
@@ -238,7 +234,7 @@ function perbaruiStatusSync(labelStatus = null) {
     ? ` &bull; Terakhir: ${escapeHtml(formatWaktu(waktuSyncTerakhir))}`
     : "";
 
-  el.innerHTML = `Lokal: <strong>Aktif</strong> &bull; Cloud: ${cloudTeks}${waktuTeks}`;
+  el.innerHTML = `Mode: <strong>Langsung Cloud</strong> &bull; Supabase: ${cloudTeks}${waktuTeks}`;
 }
 
 async function requestSupabase(tabel, method = "GET", body = null, query = "") {
@@ -275,7 +271,7 @@ async function requestSupabase(tabel, method = "GET", body = null, query = "") {
 
   if (!res.ok) {
     const detailError = await res.text();
-    throw new Error(`HTTP ${res.status}: ${detailError || "Gagal terhubung ke cloud"}`);
+    throw new Error(`HTTP ${res.status}: ${detailError || "Gagal terhubung ke Supabase"}`);
   }
 
   if (res.status === 204) return [];
@@ -283,97 +279,53 @@ async function requestSupabase(tabel, method = "GET", body = null, query = "") {
   return teks ? JSON.parse(teks) : [];
 }
 
-function kunciUnikBarang(b) {
-  const kat = b.kategori === "Pupuk" ? "Pupuk" : "Obat";
-  const nama = String(b.nama || "").trim().toLowerCase();
-  const uk = normalisasiUkuran(b.ukuran, kat, b.satuanUkuran || b.satuan_ukuran || "kg").toLowerCase();
-  return `${kat}::${nama}::${uk}`;
-}
-
-function timestampItem(item) {
-  const kandidat = item.dieditPada || item.diedit_pada || item.dibuatPada || item.dibuat_pada || "";
-  const t = new Date(kandidat).getTime();
-  return isNaN(t) ? 0 : t;
-}
-
-function susunPayloadBarangCloud(item, pemetaanIdLokalKeCloud = {}) {
-  const rawHargaToko = item.hargaToko || item.harga_toko || {};
-  const hargaTokoCloud = {};
-  Object.keys(rawHargaToko).forEach(k => {
-    const idCloud = pemetaanIdLokalKeCloud[String(k)] || k;
-    hargaTokoCloud[String(idCloud)] = Number(rawHargaToko[k] || 0);
-  });
+function normalisasiBarisBarangCloud(row) {
+  const kat = row.kategori === "Pupuk" ? "Pupuk" : "Obat";
+  const satuanUkuran = kat === "Pupuk"
+    ? ((row.satuan_ukuran || row.satuanUkuran) === "sack" ? "sack" : "kg")
+    : null;
 
   return {
-    nama: item.nama,
-    kategori: item.kategori,
-    ukuran: item.ukuran,
-    satuan_ukuran: item.satuanUkuran || item.satuan_ukuran || null,
-    harga_jual: Number(item.hargaJual ?? item.harga_jual ?? 0),
-    harga_toko: hargaTokoCloud,
-    dibuat_pada: item.dibuatPada || item.dibuat_pada || new Date().toISOString(),
-    diedit_pada: item.dieditPada || item.diedit_pada || null,
-    riwayat_edit: Array.isArray(item.riwayatEdit || item.riwayat_edit)
-      ? (item.riwayatEdit || item.riwayat_edit)
+    id: row.id,
+    nama: row.nama || "",
+    kategori: kat,
+    ukuran: normalisasiUkuran(row.ukuran, kat, satuanUkuran || "kg"),
+    satuanUkuran,
+    hargaJual: Number(row.harga_jual ?? row.hargaJual ?? 0),
+    hargaToko: row.harga_toko || row.hargaToko || {},
+    dibuatPada: row.dibuat_pada || row.dibuatPada || null,
+    dieditPada: row.diedit_pada || row.dieditPada || null,
+    riwayatEdit: Array.isArray(row.riwayat_edit || row.riwayatEdit)
+      ? (row.riwayat_edit || row.riwayatEdit)
       : []
   };
 }
 
-async function muatUlangDariCloudKeLokal() {
-  const tokoCloud = await requestSupabase("toko", "GET", null, "?select=*&order=id.asc");
-  const barangCloud = await requestSupabase("barang", "GET", null, "?select=*&order=id.asc");
-
-  await db.transaction("rw", db.toko, db.barang, async () => {
-    await db.toko.clear();
-    await db.barang.clear();
-
-    const pemetaanIdCloudKeLokal = {};
-    for (const tc of tokoCloud) {
-      const idLokBaru = await db.toko.add({ nama: tc.nama });
-      if (tc.id !== undefined && tc.id !== null) {
-        pemetaanIdCloudKeLokal[String(tc.id)] = idLokBaru;
-      }
-    }
-
-    for (const row of barangCloud) {
-      const kat = row.kategori === "Pupuk" ? "Pupuk" : "Obat";
-      const satuanUkuran = kat === "Pupuk"
-        ? ((row.satuan_ukuran || row.satuanUkuran) === "sack" ? "sack" : "kg")
-        : null;
-      const rawHargaToko = row.harga_toko || row.hargaToko || {};
-      const hargaTokoLokal = {};
-      Object.keys(rawHargaToko).forEach(idCloud => {
-        const idLok = pemetaanIdCloudKeLokal[String(idCloud)] || idCloud;
-        hargaTokoLokal[idLok] = Number(rawHargaToko[idCloud] || 0);
-      });
-
-      await db.barang.add({
-        nama: row.nama,
-        kategori: kat,
-        ukuran: normalisasiUkuran(row.ukuran, kat, satuanUkuran || "kg"),
-        satuanUkuran,
-        hargaJual: Number(row.harga_jual ?? row.hargaJual ?? 0),
-        hargaToko: hargaTokoLokal,
-        dibuatPada: row.dibuat_pada || row.dibuatPada || new Date().toISOString(),
-        dieditPada: row.diedit_pada || row.dieditPada || null,
-        riwayatEdit: Array.isArray(row.riwayat_edit || row.riwayatEdit)
-          ? (row.riwayat_edit || row.riwayatEdit)
-          : []
-      });
-    }
+function susunPayloadBarangCloud(data) {
+  const hargaTokoClean = {};
+  const rawHt = data.hargaToko || {};
+  Object.keys(rawHt).forEach(k => {
+    hargaTokoClean[String(k)] = Number(rawHt[k] || 0);
   });
 
-  daftarToko = await db.toko.toArray();
-  waktuSyncTerakhir = new Date().toISOString();
-  await tampilkanBarang();
-  perbaruiStatusSync("Tersinkron");
+  return {
+    nama: data.nama,
+    kategori: data.kategori,
+    ukuran: data.ukuran,
+    satuan_ukuran: data.satuanUkuran || null,
+    harga_jual: Number(data.hargaJual || 0),
+    harga_toko: hargaTokoClean,
+    dibuat_pada: data.dibuatPada || new Date().toISOString(),
+    diedit_pada: data.dieditPada || null,
+    riwayat_edit: Array.isArray(data.riwayatEdit) ? data.riwayatEdit : []
+  };
 }
 
-async function sinkronkanSekarang(tampilkanPesan = false) {
+async function muatDataDariCloud(tampilkanPesan = false) {
   if (!cloudSudahDiatur()) {
     perbaruiStatusSync();
     if (tampilkanPesan) {
-      alert("Konfigurasi cloud belum diisi di CLOUD_DEFAULT pada app.js.");
+      alert("Konfigurasi Supabase (CLOUD_DEFAULT) belum diisi di app.js.");
     }
     return false;
   }
@@ -386,89 +338,52 @@ async function sinkronkanSekarang(tampilkanPesan = false) {
   if (!navigator.onLine) {
     perbaruiStatusSync("Offline");
     if (tampilkanPesan) {
-      alert("Perangkat sedang offline. Data tetap aman di memori lokal dan akan disinkronkan saat internet tersedia.");
+      alert("Perangkat sedang offline. Aplikasi langsung cloud membutuhkan koneksi internet.");
     }
     return false;
   }
 
-  if (sedangSinkron) return false;
-  sedangSinkron = true;
-  perbaruiStatusSync("Sedang sinkron...");
+  if (sedangMemuat) return false;
+  sedangMemuat = true;
+  perbaruiStatusSync("Memuat data...");
 
   try {
-    const tokoLokal = await db.toko.toArray();
-    const barangLokal = await db.barang.toArray();
-
-    const tokoCloud = await requestSupabase("toko", "GET", null, "?select=*&order=id.asc");
-    const barangCloud = await requestSupabase("barang", "GET", null, "?select=*&order=id.asc");
-
-    const petaNamaToko = new Map();
-    tokoCloud.forEach(tc => {
-      const namaNorm = String(tc.nama || "").trim().toLowerCase();
-      if (namaNorm && !petaNamaToko.has(namaNorm)) {
-        petaNamaToko.set(namaNorm, tc);
-      }
-    });
-
-    for (const tl of tokoLokal) {
-      const namaBersih = String(tl.nama || "").trim();
-      if (!namaBersih) continue;
-      const namaNorm = namaBersih.toLowerCase();
-      if (!petaNamaToko.has(namaNorm)) {
-        const dibuat = await requestSupabase("toko", "POST", [{ nama: namaBersih }]);
-        if (dibuat && dibuat[0]) {
-          petaNamaToko.set(namaNorm, dibuat[0]);
-        }
-      }
-    }
-
-    const tokoFinalCloud = Array.from(petaNamaToko.values());
-    const pemetaanIdLokalKeCloud = {};
-    tokoLokal.forEach(tl => {
-      const cocok = tokoFinalCloud.find(
-        tf => String(tf.nama || "").trim().toLowerCase() === String(tl.nama || "").trim().toLowerCase()
+    let tokoRows = await requestSupabase("toko", "GET", null, "?select=*&order=id.asc");
+    if (!Array.isArray(tokoRows) || tokoRows.length === 0) {
+      const dibuat = await requestSupabase(
+        "toko",
+        "POST",
+        TOKO_DEFAULT.map(nama => ({ nama }))
       );
-      if (cocok && tl.id !== undefined) {
-        pemetaanIdLokalKeCloud[String(tl.id)] = cocok.id;
-      }
-    });
-
-    const petaBarangCloud = new Map();
-    barangCloud.forEach(bc => {
-      petaBarangCloud.set(kunciUnikBarang(bc), bc);
-    });
-
-    for (const bl of barangLokal) {
-      const k = kunciUnikBarang(bl);
-      const eksisting = petaBarangCloud.get(k);
-      const payload = susunPayloadBarangCloud(bl, pemetaanIdLokalKeCloud);
-
-      if (!eksisting) {
-        await requestSupabase("barang", "POST", [payload]);
-      } else {
-        const waktuLokal = timestampItem(bl);
-        const waktuCloud = timestampItem(eksisting);
-        if (waktuLokal > waktuCloud && eksisting.id !== undefined) {
-          await requestSupabase("barang", "PATCH", payload, `?id=eq.${encodeURIComponent(eksisting.id)}`);
-        }
-      }
+      tokoRows = Array.isArray(dibuat) ? dibuat : [];
     }
 
-    await muatUlangDariCloudKeLokal();
+    const barangRows = await requestSupabase("barang", "GET", null, "?select=*&order=id.asc");
+
+    daftarToko = tokoRows.map(t => ({ id: t.id, nama: t.nama }));
+    semuaBarangCache = (Array.isArray(barangRows) ? barangRows : []).map(normalisasiBarisBarangCloud);
+    waktuSyncTerakhir = new Date().toISOString();
+
+    await tampilkanBarang();
+    perbaruiStatusSync("Tersinkron");
 
     if (tampilkanPesan) {
-      alert("Sinkronisasi dengan cloud berhasil.");
+      alert("Data berhasil dimuat dari Supabase.");
     }
     return true;
   } catch (err) {
-    perbaruiStatusSync("Gagal sync");
+    perbaruiStatusSync("Gagal memuat");
     if (tampilkanPesan) {
-      alert(`Sinkronisasi cloud belum berhasil: ${err.message}`);
+      alert(`Gagal memuat data dari Supabase: ${err.message}`);
     }
     return false;
   } finally {
-    sedangSinkron = false;
+    sedangMemuat = false;
   }
+}
+
+async function sinkronkanSekarang(tampilkanPesan = false) {
+  return muatDataDariCloud(tampilkanPesan);
 }
 
 function lepasFokusAktif() {
@@ -689,31 +604,6 @@ function susunKeteranganPerubahan(dataLama, dataBaru) {
   return "Mengedit " + daftarPerubahan.join("; ");
 }
 
-async function muatToko() {
-  if (cloudSudahDiatur() && navigator.onLine && muatSesiAuth()) {
-    try {
-      await muatUlangDariCloudKeLokal();
-      return;
-    } catch (e) {
-      if (!muatSesiAuth()) return;
-    }
-  }
-
-  let rows = await db.toko.toArray();
-  if (rows.length === 0) {
-    for (const nama of TOKO_DEFAULT) {
-      await db.toko.add({ nama });
-    }
-    rows = await db.toko.toArray();
-  }
-  daftarToko = rows;
-  perbaruiStatusSync();
-  await tampilkanBarang();
-  if (cloudSudahDiatur() && navigator.onLine && muatSesiAuth()) {
-    sinkronkanSekarang(false);
-  }
-}
-
 function renderFormToko(nilaiHarga = {}) {
   const container = document.getElementById("input-harga-toko");
   container.innerHTML = "";
@@ -761,23 +651,6 @@ function bersihkanFormBarang() {
   document.getElementById("hargaJual").value = "";
 }
 
-async function bangunPemetaanTokoLokalKeCloud() {
-  const pemetaan = {};
-  if (!cloudSudahDiatur() || !navigator.onLine) return pemetaan;
-  try {
-    const tokoCloud = await requestSupabase("toko", "GET", null, "?select=*&order=id.asc");
-    daftarToko.forEach(tl => {
-      const cocok = tokoCloud.find(
-        tc => String(tc.nama || "").trim().toLowerCase() === String(tl.nama || "").trim().toLowerCase()
-      );
-      if (cocok && tl.id !== undefined) {
-        pemetaan[String(tl.id)] = cocok.id;
-      }
-    });
-  } catch (e) {}
-  return pemetaan;
-}
-
 async function simpanBarang() {
   const nama = document.getElementById("nama").value.trim();
   const kategori = document.getElementById("kategori").value;
@@ -793,9 +666,8 @@ async function simpanBarang() {
     return;
   }
 
-  const semuaBarang = await db.barang.toArray();
-  const duplikat = semuaBarang.find(b => {
-    if (idSedangDiedit !== null && b.id === idSedangDiedit) return false;
+  const duplikat = semuaBarangCache.find(b => {
+    if (idSedangDiedit !== null && String(b.id) === String(idSedangDiedit)) return false;
     const samaKategori = b.kategori === kategori;
     const samaNama = (b.nama || "").trim().toLowerCase() === nama.toLowerCase();
     const ukuranExisting = normalisasiUkuran(b.ukuran, b.kategori, b.satuanUkuran);
@@ -813,116 +685,89 @@ async function simpanBarang() {
   daftarToko.forEach(t => {
     const el = document.getElementById(`toko-input-${t.id}`);
     const angka = el ? ambilAngkaMurni(el.value) : 0;
-    hargaToko[t.id] = isNaN(angka) ? 0 : angka;
+    hargaToko[String(t.id)] = isNaN(angka) ? 0 : angka;
   });
 
   const waktuSekarang = new Date().toISOString();
   const satuanUkuranSimpan = kategori === "Pupuk" ? satuanPupuk : null;
-  let barangTersimpan = null;
-  let dataLamaUntukCloud = null;
+  const idTargetEdit = idSedangDiedit;
 
-  if (idSedangDiedit !== null) {
-    const idTarget = idSedangDiedit;
-    const dataLama = await db.barang.get(idTarget);
-    dataLamaUntukCloud = dataLama;
-    const dibuatPadaAwal = (dataLama && dataLama.dibuatPada) ? dataLama.dibuatPada : waktuSekarang;
-    const riwayatLama = Array.isArray(dataLama && dataLama.riwayatEdit) ? dataLama.riwayatEdit : [];
+  try {
+    sedangMemuat = true;
+    perbaruiStatusSync("Menyimpan...");
 
-    barangTersimpan = {
-      nama,
-      kategori,
-      ukuran,
-      satuanUkuran: satuanUkuranSimpan,
-      hargaJual,
-      hargaToko,
-      dibuatPada: dibuatPadaAwal,
-      dieditPada: waktuSekarang,
-      riwayatEdit: [
-        ...riwayatLama,
-        {
-          waktuEdit: waktuSekarang,
-          keterangan: susunKeteranganPerubahan(dataLama || {}, {
-            nama,
-            kategori,
-            ukuran,
-            satuanUkuran: satuanUkuranSimpan,
-            hargaJual,
-            hargaToko
-          })
-        }
-      ]
-    };
+    if (idTargetEdit !== null) {
+      const dataLama = semuaBarangCache.find(b => String(b.id) === String(idTargetEdit)) || {};
+      const dibuatPadaAwal = dataLama.dibuatPada || waktuSekarang;
+      const riwayatLama = Array.isArray(dataLama.riwayatEdit) ? dataLama.riwayatEdit : [];
 
-    await db.barang.update(idTarget, barangTersimpan);
-    tutupModalBarang();
-  } else {
-    barangTersimpan = {
-      nama,
-      kategori,
-      ukuran,
-      satuanUkuran: satuanUkuranSimpan,
-      hargaJual,
-      hargaToko,
-      dibuatPada: waktuSekarang,
-      dieditPada: null,
-      riwayatEdit: []
-    };
-    await db.barang.add(barangTersimpan);
-    tutupModalBarang();
-  }
+      const dataBaru = {
+        nama,
+        kategori,
+        ukuran,
+        satuanUkuran: satuanUkuranSimpan,
+        hargaJual,
+        hargaToko,
+        dibuatPada: dibuatPadaAwal,
+        dieditPada: waktuSekarang,
+        riwayatEdit: [
+          ...riwayatLama,
+          {
+            waktuEdit: waktuSekarang,
+            keterangan: susunKeteranganPerubahan(dataLama, {
+              nama,
+              kategori,
+              ukuran,
+              satuanUkuran: satuanUkuranSimpan,
+              hargaJual,
+              hargaToko
+            })
+          }
+        ]
+      };
 
-  kategoriAktif = kategori;
-  await tampilkanBarang();
+      const payload = susunPayloadBarangCloud(dataBaru);
+      await requestSupabase("barang", "PATCH", payload, `?id=eq.${encodeURIComponent(idTargetEdit)}`);
+      tutupModalBarang();
+      kategoriAktif = kategori;
+      sedangMemuat = false;
+      await muatDataDariCloud(false);
 
-  if (cloudSudahDiatur() && navigator.onLine && barangTersimpan) {
-    try {
-      sedangSinkron = true;
-      perbaruiStatusSync("Menyimpan ke cloud...");
-      const pemetaanId = await bangunPemetaanTokoLokalKeCloud();
-      const payloadBaru = susunPayloadBarangCloud(barangTersimpan, pemetaanId);
-      const semuaCloud = await requestSupabase("barang", "GET", null, "?select=*");
-
-      const kunciLama = dataLamaUntukCloud ? kunciUnikBarang(dataLamaUntukCloud) : null;
-      const kunciBaru = kunciUnikBarang(barangTersimpan);
-
-      // Prioritaskan kecocokan dengan data lama saat mengedit agar ter-update (PATCH), bukan tambah baru (POST)
-      const cocokLama = kunciLama
-        ? semuaCloud.find(row => kunciUnikBarang(row) === kunciLama)
-        : null;
-      const cocokBaru = semuaCloud.find(row => kunciUnikBarang(row) === kunciBaru);
-
-      if (dataLamaUntukCloud && cocokLama && cocokLama.id !== undefined) {
-        await requestSupabase("barang", "PATCH", payloadBaru, `?id=eq.${encodeURIComponent(cocokLama.id)}`);
-        if (cocokBaru && cocokBaru.id !== undefined && String(cocokBaru.id) !== String(cocokLama.id)) {
-          await requestSupabase("barang", "DELETE", null, `?id=eq.${encodeURIComponent(cocokBaru.id)}`);
-        }
-      } else if (cocokBaru && cocokBaru.id !== undefined) {
-        await requestSupabase("barang", "PATCH", payloadBaru, `?id=eq.${encodeURIComponent(cocokBaru.id)}`);
-      } else {
-        await requestSupabase("barang", "POST", [payloadBaru]);
+      if (idDetailAktif !== null && String(idDetailAktif) === String(idTargetEdit)) {
+        await bukaDetail(idTargetEdit);
       }
+    } else {
+      const dataBaru = {
+        nama,
+        kategori,
+        ukuran,
+        satuanUkuran: satuanUkuranSimpan,
+        hargaJual,
+        hargaToko,
+        dibuatPada: waktuSekarang,
+        dieditPada: null,
+        riwayatEdit: []
+      };
 
-      await muatUlangDariCloudKeLokal();
-      if (idDetailAktif !== null) {
-        const itemTerbaru = (await db.barang.toArray()).find(b => kunciUnikBarang(b) === kunciBaru);
-        if (itemTerbaru) {
-          await bukaDetail(itemTerbaru.id);
-        }
-      }
-    } catch (err) {
-      perbaruiStatusSync("Gagal sync");
-      alert(`Data tersimpan di HP, tetapi gagal ke cloud: ${err.message}`);
-    } finally {
-      sedangSinkron = false;
+      const payload = susunPayloadBarangCloud(dataBaru);
+      await requestSupabase("barang", "POST", [payload]);
+      tutupModalBarang();
+      kategoriAktif = kategori;
+      sedangMemuat = false;
+      await muatDataDariCloud(false);
     }
+  } catch (err) {
+    sedangMemuat = false;
+    perbaruiStatusSync("Gagal simpan");
+    alert(`Gagal menyimpan ke Supabase: ${err.message}`);
   }
 }
 
-async function mulaiEdit(id) {
-  const item = await db.barang.get(id);
+function mulaiEdit(id) {
+  const item = semuaBarangCache.find(b => String(b.id) === String(id));
   if (!item) return;
 
-  idSedangDiedit = id;
+  idSedangDiedit = item.id;
   const katItem = item.kategori || KATEGORI_STATIS[0];
   document.getElementById("judul-form-barang").textContent = "Edit";
   document.getElementById("btn-simpan-barang").textContent = "Update Barang";
@@ -1012,17 +857,17 @@ function renderIsiTabel() {
     const ukuranTampil = normalisasiUkuran(item.ukuran, item.kategori, item.satuanUkuran);
     let tdTokoHtml = "";
     daftarToko.forEach(t => {
-      tdTokoHtml += `<td class="col-toko">${formatAngkaToko(hargaToko[t.id])}</td>`;
+      tdTokoHtml += `<td class="col-toko">${formatAngkaToko(hargaToko[t.id] ?? hargaToko[String(t.id)])}</td>`;
     });
 
     tbody.innerHTML += `
-      <tr class="baris-klik" onclick="bukaDetail(${item.id})">
+      <tr class="baris-klik" onclick="bukaDetail('${escapeHtml(item.id)}')">
         <td class="col-nama"><strong>${escapeHtml(item.nama)}</strong></td>
         <td class="col-ukuran">${escapeHtml(ukuranTampil)}</td>
         <td class="col-harga"><strong>${formatAngkaToko(item.hargaJual)}</strong></td>
         ${tdTokoHtml}
         <td class="col-aksi" onclick="event.stopPropagation()">
-          <button type="button" class="btn-hapus btn-kecil" onclick="hapusBarang(${item.id})">Hapus</button>
+          <button type="button" class="btn-hapus btn-kecil" onclick="hapusBarang('${escapeHtml(item.id)}')">Hapus</button>
         </td>
       </tr>
     `;
@@ -1031,7 +876,6 @@ function renderIsiTabel() {
 
 async function tampilkanBarang() {
   perbaruiModeTabelKategori();
-  semuaBarangCache = await db.barang.toArray();
   buatTabKategori();
   renderHeaderTabel();
   renderIsiTabel();
@@ -1079,10 +923,10 @@ function renderLogWaktuDetail(item) {
 }
 
 async function bukaDetail(id) {
-  const item = await db.barang.get(id);
+  const item = semuaBarangCache.find(b => String(b.id) === String(id));
   if (!item) return;
 
-  idDetailAktif = id;
+  idDetailAktif = item.id;
   const katItem = item.kategori || KATEGORI_STATIS[0];
   const labelNama = ambilLabelNamaKategori(katItem);
   const ukuranTampil = normalisasiUkuran(item.ukuran, katItem, item.satuanUkuran);
@@ -1113,10 +957,11 @@ async function bukaDetail(id) {
   const hargaToko = item.hargaToko || {};
   let tokoBoxesHtml = "";
   daftarToko.forEach(t => {
+    const nilaiToko = hargaToko[t.id] ?? hargaToko[String(t.id)] ?? 0;
     tokoBoxesHtml += `
       <div class="detail-box">
         <div class="detail-label">${escapeHtml(t.nama)}</div>
-        <div class="detail-val">${formatRupiah(hargaToko[t.id])}</div>
+        <div class="detail-val">${formatRupiah(nilaiToko)}</div>
       </div>
     `;
   });
@@ -1125,7 +970,7 @@ async function bukaDetail(id) {
   renderLogWaktuDetail(item);
 
   document.getElementById("detail-btn-hapus").onclick = async () => {
-    const terhapus = await hapusBarang(id);
+    const terhapus = await hapusBarang(item.id);
     if (terhapus) {
       tutupDetail();
     }
@@ -1146,41 +991,27 @@ function editDariDetail() {
 
 async function hapusBarang(id) {
   if (!confirm("Hapus barang ini?")) return false;
-  const item = await db.barang.get(id);
-  await db.barang.delete(id);
-  await tampilkanBarang();
 
-  if (item && cloudSudahDiatur() && navigator.onLine) {
-    try {
-      sedangSinkron = true;
-      perbaruiStatusSync("Menghapus di cloud...");
-      const semuaCloud = await requestSupabase("barang", "GET", null, "?select=*");
-      const targetKey = kunciUnikBarang(item);
-      const cocokList = semuaCloud.filter(row => kunciUnikBarang(row) === targetKey);
-
-      for (const cocok of cocokList) {
-        if (cocok && cocok.id !== undefined) {
-          await requestSupabase("barang", "DELETE", null, `?id=eq.${encodeURIComponent(cocok.id)}`);
-        }
-      }
-
-      await muatUlangDariCloudKeLokal();
-    } catch (err) {
-      perbaruiStatusSync("Gagal sync");
-      alert(`Barang terhapus di HP, tetapi gagal dihapus di cloud: ${err.message}`);
-    } finally {
-      sedangSinkron = false;
-    }
+  try {
+    sedangMemuat = true;
+    perbaruiStatusSync("Menghapus...");
+    await requestSupabase("barang", "DELETE", null, `?id=eq.${encodeURIComponent(id)}`);
+    sedangMemuat = false;
+    await muatDataDariCloud(false);
+    return true;
+  } catch (err) {
+    sedangMemuat = false;
+    perbaruiStatusSync("Gagal hapus");
+    alert(`Gagal menghapus barang di Supabase: ${err.message}`);
+    return false;
   }
-
-  return true;
 }
 
 function sinkronkanInputDraftToko() {
   const inputs = document.querySelectorAll(".input-nama-toko");
   inputs.forEach(inp => {
-    const id = parseInt(inp.getAttribute("data-id"), 10);
-    const target = draftToko.find(t => t.id === id);
+    const rawId = inp.getAttribute("data-id");
+    const target = draftToko.find(t => String(t.id) === String(rawId));
     if (target) {
       target.nama = inp.value;
     }
@@ -1233,11 +1064,6 @@ async function tutupModalToko() {
       await simpanPerubahanToko();
       return;
     }
-
-    draftToko = draftToko.filter(t => !t.isBaru);
-    tutupModalTokoLangsung();
-    await muatToko();
-    return;
   }
 
   tutupModalTokoLangsung();
@@ -1250,8 +1076,8 @@ function renderListEditToko() {
   draftToko.forEach(t => {
     listEl.innerHTML += `
       <div class="toko-row">
-        <input type="text" class="input-nama-toko" data-id="${t.id}" value="${escapeHtml(t.nama)}">
-        <button type="button" class="btn-hapus btn-kecil" onclick="hapusToko(${t.id})">Hapus</button>
+        <input type="text" class="input-nama-toko" data-id="${escapeHtml(t.id)}" value="${escapeHtml(t.nama)}">
+        <button type="button" class="btn-hapus btn-kecil" onclick="hapusToko('${escapeHtml(t.id)}')">Hapus</button>
       </div>
     `;
   });
@@ -1282,121 +1108,61 @@ function hapusToko(id) {
     return;
   }
   if (!confirm("Hapus toko ini dari daftar?")) return;
-  draftToko = draftToko.filter(t => t.id !== id);
+  draftToko = draftToko.filter(t => String(t.id) !== String(id));
   renderListEditToko();
 }
 
 async function simpanPerubahanToko() {
   sinkronkanInputDraftToko();
 
-  const tokoTersimpanDiDb = await db.toko.toArray();
-  const idDraftAktif = new Set(draftToko.filter(t => t.id > 0).map(t => t.id));
-  const tokoTerhapus = tokoTersimpanDiDb.filter(lama => !idDraftAktif.has(lama.id));
+  const idDraftAktif = new Set(draftToko.filter(t => !t.isBaru).map(t => String(t.id)));
+  const tokoTerhapus = daftarToko.filter(lama => !idDraftAktif.has(String(lama.id)));
 
-  const pemetaanIdLokalKeCloud = await bangunPemetaanTokoLokalKeCloud();
+  try {
+    sedangMemuat = true;
+    perbaruiStatusSync("Menyimpan toko...");
 
-  await db.transaction("rw", db.toko, db.barang, async () => {
     for (const lama of tokoTerhapus) {
-      await db.toko.delete(lama.id);
-    }
-
-    const semuaBarang = await db.barang.toArray();
-    for (const b of semuaBarang) {
-      const htBaru = { ...(b.hargaToko || {}) };
-      for (const lama of tokoTerhapus) {
-        delete htBaru[String(lama.id)];
-        delete htBaru[lama.id];
-      }
-      await db.barang.update(b.id, { hargaToko: htBaru });
+      await requestSupabase("toko", "DELETE", null, `?id=eq.${encodeURIComponent(lama.id)}`);
     }
 
     for (const item of draftToko) {
       const namaBersih = (item.nama || "").trim();
       if (!namaBersih) continue;
 
-      if (item.id > 0) {
-        await db.toko.update(item.id, { nama: namaBersih });
+      if (!item.isBaru) {
+        await requestSupabase("toko", "PATCH", { nama: namaBersih }, `?id=eq.${encodeURIComponent(item.id)}`);
       } else {
-        await db.toko.add({ nama: namaBersih });
+        await requestSupabase("toko", "POST", [{ nama: namaBersih }]);
       }
     }
-  });
 
-  tutupModalTokoLangsung();
-  daftarToko = await db.toko.toArray();
-  await tampilkanBarang();
-
-  if (cloudSudahDiatur() && navigator.onLine) {
-    try {
-      sedangSinkron = true;
-      perbaruiStatusSync("Menyimpan toko ke cloud...");
-      const tokoCloud = await requestSupabase("toko", "GET", null, "?select=*&order=id.asc");
-
-      const idCloudDihapus = new Set();
-      for (const lama of tokoTerhapus) {
-        const cocokCloud = tokoCloud.find(
-          tc => String(tc.nama || "").trim().toLowerCase() === String(lama.nama || "").trim().toLowerCase()
-        );
-        if (cocokCloud && cocokCloud.id !== undefined) {
-          idCloudDihapus.add(String(cocokCloud.id));
-          await requestSupabase("toko", "DELETE", null, `?id=eq.${encodeURIComponent(cocokCloud.id)}`);
-        }
-      }
-
-      for (const item of draftToko) {
-        const namaBersih = (item.nama || "").trim();
-        if (!namaBersih) continue;
-
-        if (item.id > 0) {
-          const idCloud = pemetaanIdLokalKeCloud[String(item.id)];
-          if (idCloud !== undefined) {
-            await requestSupabase("toko", "PATCH", { nama: namaBersih }, `?id=eq.${encodeURIComponent(idCloud)}`);
+    if (tokoTerhapus.length > 0) {
+      const idsDihapus = new Set(tokoTerhapus.map(t => String(t.id)));
+      for (const b of semuaBarangCache) {
+        const rawHt = b.hargaToko || {};
+        let berubah = false;
+        const htBersih = {};
+        Object.keys(rawHt).forEach(k => {
+          if (idsDihapus.has(String(k))) {
+            berubah = true;
           } else {
-            const cocokNama = tokoCloud.find(
-              tc => String(tc.nama || "").trim().toLowerCase() === namaBersih.toLowerCase()
-            );
-            if (cocokNama && cocokNama.id !== undefined) {
-              await requestSupabase("toko", "PATCH", { nama: namaBersih }, `?id=eq.${encodeURIComponent(cocokNama.id)}`);
-            } else {
-              await requestSupabase("toko", "POST", [{ nama: namaBersih }]);
-            }
+            htBersih[k] = rawHt[k];
           }
-        } else {
-          const sudahAda = tokoCloud.find(
-            tc => String(tc.nama || "").trim().toLowerCase() === namaBersih.toLowerCase()
-          );
-          if (!sudahAda) {
-            await requestSupabase("toko", "POST", [{ nama: namaBersih }]);
-          }
+        });
+        if (berubah && b.id !== undefined) {
+          await requestSupabase("barang", "PATCH", { harga_toko: htBersih }, `?id=eq.${encodeURIComponent(b.id)}`);
         }
       }
-
-      if (idCloudDihapus.size > 0) {
-        const barangCloud = await requestSupabase("barang", "GET", null, "?select=*");
-        for (const bc of barangCloud) {
-          const rawHt = bc.harga_toko || bc.hargaToko || {};
-          let berubah = false;
-          const htBersih = {};
-          Object.keys(rawHt).forEach(k => {
-            if (idCloudDihapus.has(String(k))) {
-              berubah = true;
-            } else {
-              htBersih[k] = rawHt[k];
-            }
-          });
-          if (berubah && bc.id !== undefined) {
-            await requestSupabase("barang", "PATCH", { harga_toko: htBersih }, `?id=eq.${encodeURIComponent(bc.id)}`);
-          }
-        }
-      }
-
-      await muatUlangDariCloudKeLokal();
-    } catch (err) {
-      perbaruiStatusSync("Gagal sync");
-      alert(`Toko tersimpan di HP, tetapi gagal disinkronkan ke cloud: ${err.message}`);
-    } finally {
-      sedangSinkron = false;
     }
+
+    tutupModalTokoLangsung();
+    sedangMemuat = false;
+    await muatDataDariCloud(false);
+  } catch (err) {
+    sedangMemuat = false;
+    perbaruiStatusSync("Gagal simpan");
+    alert(`Gagal menyimpan perubahan toko ke Supabase: ${err.message}`);
   }
 }
 
@@ -1413,13 +1179,13 @@ async function inisialisasiAplikasi() {
   }
 
   tampilkanHalamanAplikasi();
-  await muatToko();
+  await muatDataDariCloud(false);
 }
 
 window.addEventListener("online", () => {
   perbaruiStatusSync("Online");
   if (cloudSudahDiatur() && muatSesiAuth()) {
-    sinkronkanSekarang(false);
+    muatDataDariCloud(false);
   }
 });
 
