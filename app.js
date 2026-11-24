@@ -11,8 +11,8 @@ const STORAGE_KEY_SESSION = "inci_tani_auth_session_v1";
 
 // Isi langsung di sini agar semua HP otomatis terhubung ke database cloud yang sama
 const CLOUD_DEFAULT = {
-  url: "",
-  anonKey: ""
+  url: "https://svcsyhuvmwvtymareyxu.supabase.co/",
+  anonKey: "sb_publishable_0H2j4ltoC9aqs25kDhFohw_hC6oOg7a"
 };
 
 let daftarToko = [];
