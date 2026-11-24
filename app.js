@@ -19,6 +19,7 @@ let semuaBarangCache = [];
 let indexPesanKonfirmasi = 0;
 let waktuSyncTerakhir = null;
 let sedangMemuat = false;
+let sedangMenyimpanBarang = false;
 let sesiAuth = null;
 
 function ambilKonfigurasiCloud() {
@@ -171,7 +172,7 @@ async function prosesLogin(event) {
     simpanSesiAuth({
       access_token: data.access_token,
       refresh_token: data.refresh_token,
-      expires_at: data.expires_at || (Math.floor(Date.now() / 1000) + Number(data.expires_in || 3600)),
+      expires_at: data.expires_at || (Math.floor(Date.now() / 1000) + Number(dataBaru?.expires_in || data.expires_in || 3600)),
       email: (data.user && data.user.email) || email
     });
 
@@ -207,6 +208,8 @@ async function prosesLogout() {
   simpanSesiAuth(null);
   daftarToko = [];
   semuaBarangCache = [];
+  idSedangDiedit = null;
+  idDetailAktif = null;
   tampilkanHalamanLogin("");
 }
 
@@ -578,8 +581,10 @@ function susunKeteranganPerubahan(dataLama, dataBaru) {
   if ((dataLama.nama || "").trim() !== (dataBaru.nama || "").trim()) {
     daftarPerubahan.push(`Nama dari "${dataLama.nama || "-"}" menjadi "${dataBaru.nama || "-"}"`);
   }
-  if (normalisasiUkuran(dataLama.ukuran, dataLama.kategori, dataLama.satuanUkuran) !== normalisasiUkuran(dataBaru.ukuran, dataBaru.kategori, dataBaru.satuanUkuran)) {
-    daftarPerubahan.push(`Ukuran dari "${dataLama.ukuran || "-"}" menjadi "${dataBaru.ukuran || "-"}"`);
+  const ukLama = normalisasiUkuran(dataLama.ukuran, dataLama.kategori, dataLama.satuanUkuran);
+  const ukBaru = normalisasiUkuran(dataBaru.ukuran, dataBaru.kategori, dataBaru.satuanUkuran);
+  if (ukLama !== ukBaru) {
+    daftarPerubahan.push(`Ukuran dari "${ukLama}" menjadi "${ukBaru}"`);
   }
   if ((dataLama.kategori || "") !== (dataBaru.kategori || "")) {
     daftarPerubahan.push(`Kategori dari "${dataLama.kategori || "-"}" menjadi "${dataBaru.kategori || "-"}"`);
@@ -591,8 +596,8 @@ function susunKeteranganPerubahan(dataLama, dataBaru) {
   const hargaTokoLama = dataLama.hargaToko || {};
   const hargaTokoBaru = dataBaru.hargaToko || {};
   daftarToko.forEach(t => {
-    const lama = Number(hargaTokoLama[t.id] || hargaTokoLama[String(t.id)] || 0);
-    const baru = Number(hargaTokoBaru[t.id] || hargaTokoBaru[String(t.id)] || 0);
+    const lama = Number(hargaTokoLama[t.id] ?? hargaTokoLama[String(t.id)] ?? 0);
+    const baru = Number(hargaTokoBaru[t.id] ?? hargaTokoBaru[String(t.id)] ?? 0);
     if (lama !== baru) {
       daftarPerubahan.push(`Harga ${t.nama} dari ${formatRupiah(lama)} menjadi ${formatRupiah(baru)}`);
     }
@@ -652,6 +657,8 @@ function bersihkanFormBarang() {
 }
 
 async function simpanBarang() {
+  if (sedangMenyimpanBarang) return;
+
   const nama = document.getElementById("nama").value.trim();
   const kategori = document.getElementById("kategori").value;
   const satuanPupuk = document.getElementById("satuan-ukuran-pupuk").value || "kg";
@@ -666,8 +673,13 @@ async function simpanBarang() {
     return;
   }
 
+  // Ambil snapshot ID edit sebelum menutup modal
+  const idTargetEdit = idSedangDiedit;
+  const modeEdit = idTargetEdit !== null && idTargetEdit !== undefined && String(idTargetEdit) !== "";
+  const detailSedangAktif = modeEdit && idDetailAktif !== null && String(idDetailAktif) === String(idTargetEdit);
+
   const duplikat = semuaBarangCache.find(b => {
-    if (idSedangDiedit !== null && String(b.id) === String(idSedangDiedit)) return false;
+    if (modeEdit && String(b.id) === String(idTargetEdit)) return false;
     const samaKategori = b.kategori === kategori;
     const samaNama = (b.nama || "").trim().toLowerCase() === nama.toLowerCase();
     const ukuranExisting = normalisasiUkuran(b.ukuran, b.kategori, b.satuanUkuran);
@@ -690,14 +702,14 @@ async function simpanBarang() {
 
   const waktuSekarang = new Date().toISOString();
   const satuanUkuranSimpan = kategori === "Pupuk" ? satuanPupuk : null;
-  const idTargetEdit = idSedangDiedit;
-  const detailSedangAktif = idDetailAktif !== null && String(idDetailAktif) === String(idTargetEdit);
+  const btnSimpan = document.getElementById("btn-simpan-barang");
+
+  sedangMenyimpanBarang = true;
+  if (btnSimpan) btnSimpan.disabled = true;
+  perbaruiStatusSync("Menyimpan...");
 
   try {
-    sedangMemuat = true;
-    perbaruiStatusSync("Menyimpan...");
-
-    if (idTargetEdit !== null) {
+    if (modeEdit) {
       const dataLama = semuaBarangCache.find(b => String(b.id) === String(idTargetEdit)) || {};
       const dibuatPadaAwal = dataLama.dibuatPada || waktuSekarang;
       const riwayatLama = Array.isArray(dataLama.riwayatEdit) ? dataLama.riwayatEdit : [];
@@ -729,9 +741,9 @@ async function simpanBarang() {
 
       const payload = susunPayloadBarangCloud(dataBaru);
       await requestSupabase("barang", "PATCH", payload, `?id=eq.${encodeURIComponent(idTargetEdit)}`);
+
       tutupModalBarang();
       kategoriAktif = kategori;
-      sedangMemuat = false;
       await muatDataDariCloud(false);
 
       if (detailSedangAktif) {
@@ -752,15 +764,17 @@ async function simpanBarang() {
 
       const payload = susunPayloadBarangCloud(dataBaru);
       await requestSupabase("barang", "POST", [payload]);
+
       tutupModalBarang();
       kategoriAktif = kategori;
-      sedangMemuat = false;
       await muatDataDariCloud(false);
     }
   } catch (err) {
-    sedangMemuat = false;
     perbaruiStatusSync("Gagal simpan");
     alert(`Gagal menyimpan ke Supabase: ${err.message}`);
+  } finally {
+    sedangMenyimpanBarang = false;
+    if (btnSimpan) btnSimpan.disabled = false;
   }
 }
 
