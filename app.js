@@ -884,12 +884,20 @@ async function simpanBarang() {
 
       const kunciLama = dataLamaUntukCloud ? kunciUnikBarang(dataLamaUntukCloud) : null;
       const kunciBaru = kunciUnikBarang(barangTersimpan);
-      const cocok = semuaCloud.find(
-        row => kunciUnikBarang(row) === kunciBaru || (kunciLama && kunciUnikBarang(row) === kunciLama)
-      );
 
-      if (cocok && cocok.id !== undefined) {
-        await requestSupabase("barang", "PATCH", payloadBaru, `?id=eq.${encodeURIComponent(cocok.id)}`);
+      // Prioritaskan kecocokan dengan data lama saat mengedit agar ter-update (PATCH), bukan tambah baru (POST)
+      const cocokLama = kunciLama
+        ? semuaCloud.find(row => kunciUnikBarang(row) === kunciLama)
+        : null;
+      const cocokBaru = semuaCloud.find(row => kunciUnikBarang(row) === kunciBaru);
+
+      if (dataLamaUntukCloud && cocokLama && cocokLama.id !== undefined) {
+        await requestSupabase("barang", "PATCH", payloadBaru, `?id=eq.${encodeURIComponent(cocokLama.id)}`);
+        if (cocokBaru && cocokBaru.id !== undefined && String(cocokBaru.id) !== String(cocokLama.id)) {
+          await requestSupabase("barang", "DELETE", null, `?id=eq.${encodeURIComponent(cocokBaru.id)}`);
+        }
+      } else if (cocokBaru && cocokBaru.id !== undefined) {
+        await requestSupabase("barang", "PATCH", payloadBaru, `?id=eq.${encodeURIComponent(cocokBaru.id)}`);
       } else {
         await requestSupabase("barang", "POST", [payloadBaru]);
       }
