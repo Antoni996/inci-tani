@@ -9,9 +9,9 @@ const TOKO_DEFAULT = ["Toko A", "Toko B"];
 const STORAGE_KEY_CLOUD = "inci_tani_cloud_config_v1";
 const STORAGE_KEY_SESSION = "inci_tani_auth_session_v1";
 
-// Isi langsung di sini agar semua HP otomatis terhubung ke database cloud yang sama
+// WAJIB diisi dengan Project URL dan Publishable / anon key dari Supabase kamu sebelum push ke GitHub
 const CLOUD_DEFAULT = {
-  url: "https://svcsyhuvmwvtymareyxu.supabase.co/",
+  url: "https://svcsyhuvmwvtymareyxu.supabase.co",
   anonKey: "sb_publishable_0H2j4ltoC9aqs25kDhFohw_hC6oOg7a"
 };
 
@@ -690,13 +690,10 @@ function susunKeteranganPerubahan(dataLama, dataBaru) {
 }
 
 async function muatToko() {
-  if (cloudSudahDiatur() && navigator.onLine) {
+  if (cloudSudahDiatur() && navigator.onLine && muatSesiAuth()) {
     try {
-      const tokoCloud = await requestSupabase("toko", "GET", null, "?select=*&order=id.asc");
-      if (tokoCloud.length > 0) {
-        await muatUlangDariCloudKeLokal();
-        return;
-      }
+      await muatUlangDariCloudKeLokal();
+      return;
     } catch (e) {
       if (!muatSesiAuth()) return;
     }
@@ -1397,8 +1394,7 @@ async function simpanPerubahanToko() {
 
 async function inisialisasiAplikasi() {
   if (!cloudSudahDiatur()) {
-    tampilkanHalamanAplikasi();
-    await muatToko();
+    tampilkanHalamanLogin("Konfigurasi Supabase (CLOUD_DEFAULT) belum diisi di app.js.");
     return;
   }
 
