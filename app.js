@@ -7,11 +7,12 @@ db.version(2).stores({
 const KATEGORI_STATIS = ["Obat", "Pupuk"];
 const TOKO_DEFAULT = ["Toko A", "Toko B"];
 const STORAGE_KEY_CLOUD = "inci_tani_cloud_config_v1";
+const STORAGE_KEY_SESSION = "inci_tani_auth_session_v1";
 
 // Isi langsung di sini agar semua HP otomatis terhubung ke database cloud yang sama
 const CLOUD_DEFAULT = {
-  url: "https://svcsyhuvmwvtymareyxu.supabase.co/",
-  anonKey: "sb_publishable_0H2j4ltoC9aqs25kDhFohw_hC6oOg7a"
+  url: "",
+  anonKey: ""
 };
 
 let daftarToko = [];
@@ -24,6 +25,7 @@ let semuaBarangCache = [];
 let indexPesanKonfirmasi = 0;
 let waktuSyncTerakhir = null;
 let sedangSinkron = false;
+let sesiAuth = null;
 
 function ambilKonfigurasiCloud() {
   const defaultUrl = String(CLOUD_DEFAULT.url || "").trim().replace(/\/+$/, "");
@@ -49,6 +51,167 @@ function ambilKonfigurasiCloud() {
 function cloudSudahDiatur() {
   const cfg = ambilKonfigurasiCloud();
   return Boolean(cfg.url && cfg.anonKey);
+}
+
+function simpanSesiAuth(sesi) {
+  sesiAuth = sesi;
+  try {
+    if (sesi) {
+      localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify(sesi));
+    } else {
+      localStorage.removeItem(STORAGE_KEY_SESSION);
+    }
+  } catch (e) {}
+}
+
+function muatSesiAuth() {
+  if (sesiAuth && sesiAuth.access_token) return sesiAuth;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_SESSION);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.access_token) {
+        sesiAuth = parsed;
+        return sesiAuth;
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
+async function refreshTokenJikaPerlu() {
+  const sesi = muatSesiAuth();
+  if (!sesi) return null;
+
+  const sekarangDetik = Math.floor(Date.now() / 1000);
+  const expiresAt = Number(sesi.expires_at || 0);
+  if (expiresAt && expiresAt - sekarangDetik > 60) {
+    return sesi;
+  }
+
+  if (!sesi.refresh_token || !cloudSudahDiatur()) {
+    return sesi;
+  }
+
+  const cfg = ambilKonfigurasiCloud();
+  try {
+    const res = await fetch(`${cfg.url}/auth/v1/token?grant_type=refresh_token`, {
+      method: "POST",
+      headers: {
+        apikey: cfg.anonKey,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ refresh_token: sesi.refresh_token })
+    });
+    if (!res.ok) {
+      simpanSesiAuth(null);
+      return null;
+    }
+    const dataBaru = await res.json();
+    const sesiBaru = {
+      access_token: dataBaru.access_token,
+      refresh_token: dataBaru.refresh_token || sesi.refresh_token,
+      expires_at: dataBaru.expires_at || (Math.floor(Date.now() / 1000) + Number(dataBaru.expires_in || 3600)),
+      email: (dataBaru.user && dataBaru.user.email) || sesi.email
+    };
+    simpanSesiAuth(sesiBaru);
+    return sesiBaru;
+  } catch (e) {
+    return sesi;
+  }
+}
+
+function tampilkanHalamanAplikasi() {
+  document.getElementById("halaman-login").style.display = "none";
+  document.getElementById("halaman-utama").style.display = "block";
+}
+
+function tampilkanHalamanLogin(pesanError = "") {
+  document.getElementById("halaman-detail").style.display = "none";
+  document.getElementById("halaman-utama").style.display = "none";
+  document.getElementById("halaman-login").style.display = "block";
+  const elPesan = document.getElementById("login-pesan");
+  if (elPesan) {
+    elPesan.textContent = pesanError;
+  }
+}
+
+async function prosesLogin(event) {
+  event.preventDefault();
+  const elPesan = document.getElementById("login-pesan");
+  const btnLogin = document.getElementById("btn-login");
+  if (elPesan) elPesan.textContent = "";
+
+  if (!cloudSudahDiatur()) {
+    if (elPesan) {
+      elPesan.textContent = "Konfigurasi Supabase (CLOUD_DEFAULT) belum diisi di app.js.";
+    }
+    return;
+  }
+
+  const email = (document.getElementById("login-email").value || "").trim();
+  const password = document.getElementById("login-password").value || "";
+  if (!email || !password) return;
+
+  const cfg = ambilKonfigurasiCloud();
+  if (btnLogin) {
+    btnLogin.disabled = true;
+    btnLogin.textContent = "Memeriksa...";
+  }
+
+  try {
+    const res = await fetch(`${cfg.url}/auth/v1/token?grant_type=password`, {
+      method: "POST",
+      headers: {
+        apikey: cfg.anonKey,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ email, password })
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.access_token) {
+      throw new Error(data.msg || data.error_description || "Email atau kata sandi salah.");
+    }
+
+    simpanSesiAuth({
+      access_token: data.access_token,
+      refresh_token: data.refresh_token,
+      expires_at: data.expires_at || (Math.floor(Date.now() / 1000) + Number(data.expires_in || 3600)),
+      email: (data.user && data.user.email) || email
+    });
+
+    document.getElementById("login-password").value = "";
+    tampilkanHalamanAplikasi();
+    await muatToko();
+  } catch (err) {
+    if (elPesan) {
+      elPesan.textContent = err.message || "Gagal masuk.";
+    }
+  } finally {
+    if (btnLogin) {
+      btnLogin.disabled = false;
+      btnLogin.textContent = "Masuk";
+    }
+  }
+}
+
+async function prosesLogout() {
+  const sesi = muatSesiAuth();
+  const cfg = ambilKonfigurasiCloud();
+  if (sesi && sesi.access_token && cfg.url && cfg.anonKey) {
+    try {
+      await fetch(`${cfg.url}/auth/v1/logout`, {
+        method: "POST",
+        headers: {
+          apikey: cfg.anonKey,
+          Authorization: `Bearer ${sesi.access_token}`
+        }
+      });
+    } catch (e) {}
+  }
+  simpanSesiAuth(null);
+  tampilkanHalamanLogin("");
 }
 
 function perbaruiStatusSync(labelStatus = null) {
@@ -84,10 +247,16 @@ async function requestSupabase(tabel, method = "GET", body = null, query = "") {
     throw new Error("Konfigurasi cloud belum diatur.");
   }
 
+  const sesi = await refreshTokenJikaPerlu();
+  if (!sesi || !sesi.access_token) {
+    tampilkanHalamanLogin("Sesi berakhir. Silakan masuk kembali.");
+    throw new Error("Belum login ke akun toko.");
+  }
+
   const endpoint = `${cfg.url}/rest/v1/${tabel}${query}`;
   const headers = {
     apikey: cfg.anonKey,
-    Authorization: `Bearer ${cfg.anonKey}`,
+    Authorization: `Bearer ${sesi.access_token}`,
     "Content-Type": "application/json",
     Prefer: "return=representation"
   };
@@ -97,6 +266,12 @@ async function requestSupabase(tabel, method = "GET", body = null, query = "") {
     headers,
     body: body ? JSON.stringify(body) : null
   });
+
+  if (res.status === 401) {
+    simpanSesiAuth(null);
+    tampilkanHalamanLogin("Sesi tidak valid. Silakan masuk kembali.");
+    throw new Error("Akses ditolak (401). Silakan login ulang.");
+  }
 
   if (!res.ok) {
     const detailError = await res.text();
@@ -194,13 +369,17 @@ async function muatUlangDariCloudKeLokal() {
   perbaruiStatusSync("Tersinkron");
 }
 
-// Sinkronisasi dua arah antara IndexedDB (lokal) dan Supabase (cloud)
 async function sinkronkanSekarang(tampilkanPesan = false) {
   if (!cloudSudahDiatur()) {
     perbaruiStatusSync();
     if (tampilkanPesan) {
       alert("Konfigurasi cloud belum diisi di CLOUD_DEFAULT pada app.js.");
     }
+    return false;
+  }
+
+  if (!muatSesiAuth()) {
+    tampilkanHalamanLogin("Silakan masuk terlebih dahulu.");
     return false;
   }
 
@@ -518,7 +697,9 @@ async function muatToko() {
         await muatUlangDariCloudKeLokal();
         return;
       }
-    } catch (e) {}
+    } catch (e) {
+      if (!muatSesiAuth()) return;
+    }
   }
 
   let rows = await db.toko.toArray();
@@ -531,7 +712,7 @@ async function muatToko() {
   daftarToko = rows;
   perbaruiStatusSync();
   await tampilkanBarang();
-  if (cloudSudahDiatur() && navigator.onLine) {
+  if (cloudSudahDiatur() && navigator.onLine && muatSesiAuth()) {
     sinkronkanSekarang(false);
   }
 }
@@ -1146,7 +1327,6 @@ async function simpanPerubahanToko() {
       perbaruiStatusSync("Menyimpan toko ke cloud...");
       const tokoCloud = await requestSupabase("toko", "GET", null, "?select=*&order=id.asc");
 
-      // Hapus toko di cloud yang dihapus di draft
       const idCloudDihapus = new Set();
       for (const lama of tokoTerhapus) {
         const cocokCloud = tokoCloud.find(
@@ -1158,7 +1338,6 @@ async function simpanPerubahanToko() {
         }
       }
 
-      // Perbarui nama toko atau tambah toko baru di cloud
       for (const item of draftToko) {
         const namaBersih = (item.nama || "").trim();
         if (!namaBersih) continue;
@@ -1187,7 +1366,6 @@ async function simpanPerubahanToko() {
         }
       }
 
-      // Bersihkan key toko yang dihapus dari harga_toko pada semua barang di cloud
       if (idCloudDihapus.size > 0) {
         const barangCloud = await requestSupabase("barang", "GET", null, "?select=*");
         for (const bc of barangCloud) {
@@ -1217,9 +1395,26 @@ async function simpanPerubahanToko() {
   }
 }
 
+async function inisialisasiAplikasi() {
+  if (!cloudSudahDiatur()) {
+    tampilkanHalamanAplikasi();
+    await muatToko();
+    return;
+  }
+
+  const sesi = await refreshTokenJikaPerlu();
+  if (!sesi || !sesi.access_token) {
+    tampilkanHalamanLogin("");
+    return;
+  }
+
+  tampilkanHalamanAplikasi();
+  await muatToko();
+}
+
 window.addEventListener("online", () => {
   perbaruiStatusSync("Online");
-  if (cloudSudahDiatur()) {
+  if (cloudSudahDiatur() && muatSesiAuth()) {
     sinkronkanSekarang(false);
   }
 });
@@ -1232,4 +1427,4 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js");
 }
 
-muatToko();
+inisialisasiAplikasi();

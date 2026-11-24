@@ -34,6 +34,33 @@
       line-height: 1.35;
       color: #475569;
     }
+    .login-wrap {
+      max-width: 420px;
+      margin: 32px auto;
+      background: #fff;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+    }
+    .login-judul {
+      margin: 0 0 6px;
+      font-size: 22px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .login-sub {
+      margin: 0 0 16px;
+      font-size: 14px;
+      color: #475569;
+      line-height: 1.45;
+    }
+    .login-pesan {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #dc2626;
+      min-height: 20px;
+    }
     .card {
       background: #fff;
       border: 1px solid #e2e8f0;
@@ -675,8 +702,26 @@
 </head>
 <body>
 
+  <!-- HALAMAN LOGIN -->
+  <div id="halaman-login" class="login-wrap">
+    <h1 class="login-judul">Inci Tani</h1>
+    <p class="login-sub">Masuk dengan akun toko untuk melihat dan mengubah data harga obat &amp; pupuk.</p>
+    <form id="form-login" class="form-stack" onsubmit="prosesLogin(event)">
+      <div class="form-field">
+        <label for="login-email">Email</label>
+        <input type="email" id="login-email" required autocomplete="username" placeholder="kasir@incitani.local">
+      </div>
+      <div class="form-field">
+        <label for="login-password">Kata Sandi</label>
+        <input type="password" id="login-password" required autocomplete="current-password" placeholder="Masukkan kata sandi">
+      </div>
+      <button type="submit" id="btn-login">Masuk</button>
+    </form>
+    <div id="login-pesan" class="login-pesan"></div>
+  </div>
+
   <!-- HALAMAN UTAMA (TOOLBAR & TABEL) -->
-  <div id="halaman-utama">
+  <div id="halaman-utama" style="display: none;">
     <div class="header-blok">
       <h1 class="judul-utama">Inci Tani</h1>
       <h2 class="subjudul-utama">Catatan Harga Obat dan Pupuk</h2>
@@ -685,6 +730,7 @@
     <!-- Toolbar Utama (Selalu di Kanan) -->
     <div class="toolbar">
       <button type="button" class="btn-sekunder" onclick="bukaModalToko()">Kelola Toko</button>
+      <button type="button" class="btn-sekunder" onclick="prosesLogout()">Keluar</button>
     </div>
 
     <!-- Bar Status Penyimpanan Lokal + Sinkronisasi Cloud -->
