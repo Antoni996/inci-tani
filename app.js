@@ -23,6 +23,7 @@ let sedangMemuat = false;
 let sedangMenyimpanBarang = false;
 let sesiAuth = null;
 let resolverModalPesan = null;
+let timerCountdownAlert = null;
 let timerSinkronOtomatis = null;
 
 function setIkonModalPesan(bahaya = false) {
@@ -48,7 +49,15 @@ function setIkonModalPesan(bahaya = false) {
   }
 }
 
-function tutupModalPesanInternal(hasil) {
+function bersihkanTimerCountdownAlert() {
+  if (timerCountdownAlert) {
+    clearInterval(timerCountdownAlert);
+    timerCountdownAlert = null;
+  }
+}
+
+function tutupModalPesanInternal(hasil, karenaHabisWaktu = false) {
+  bersihkanTimerCountdownAlert();
   const backdrop = document.getElementById("modal-pesan");
   if (backdrop) {
     backdrop.classList.remove("aktif");
@@ -56,18 +65,20 @@ function tutupModalPesanInternal(hasil) {
   const fn = resolverModalPesan;
   resolverModalPesan = null;
   if (typeof fn === "function") {
-    fn(hasil);
+    fn(hasil, karenaHabisWaktu);
   }
 }
 
 function tampilkanAlert(pesan, opsi = {}) {
   return new Promise(resolve => {
     if (resolverModalPesan) {
-      tutupModalPesanInternal(false);
+      tutupModalPesanInternal(false, false);
     }
     const judul = opsi.judul || "Informasi";
     const teksOk = opsi.teksOk || "Oke";
     const bahaya = Boolean(opsi.bahaya);
+    const countdownDetik = Number(opsi.countdownDetik || 0);
+    const tutupModalBarangSaatSelesai = Boolean(opsi.tutupModalBarangSaatSelesai);
 
     document.getElementById("pesan-modal-judul").textContent = judul;
     document.getElementById("pesan-modal-isi").textContent = String(pesan || "");
@@ -79,14 +90,35 @@ function tampilkanAlert(pesan, opsi = {}) {
     btnBatal.style.display = "none";
     btnBatal.onclick = null;
 
-    btnOk.textContent = teksOk;
     btnOk.className = bahaya ? "btn-hapus" : "";
-    btnOk.onclick = () => {
-      tutupModalPesanInternal(true);
-      resolve();
+
+    const selesaikanAlert = (karenaHabisWaktu) => {
+      tutupModalPesanInternal(true, karenaHabisWaktu);
+      if (tutupModalBarangSaatSelesai) {
+        tutupModalBarang();
+      }
+      resolve(karenaHabisWaktu);
     };
 
-    resolverModalPesan = () => resolve();
+    if (countdownDetik > 0) {
+      let sisa = countdownDetik;
+      btnOk.textContent = `${teksOk} (${sisa})`;
+      btnOk.onclick = () => selesaikanAlert(false);
+
+      timerCountdownAlert = setInterval(() => {
+        sisa -= 1;
+        if (sisa <= 0) {
+          selesaikanAlert(true);
+        } else {
+          btnOk.textContent = `${teksOk} (${sisa})`;
+        }
+      }, 1000);
+    } else {
+      btnOk.textContent = teksOk;
+      btnOk.onclick = () => selesaikanAlert(false);
+    }
+
+    resolverModalPesan = (val, habis) => resolve(Boolean(habis));
     lepasFokusAktif();
     document.getElementById("modal-pesan").classList.add("aktif");
   });
@@ -95,7 +127,7 @@ function tampilkanAlert(pesan, opsi = {}) {
 function tampilkanKonfirmasi(pesan, opsi = {}) {
   return new Promise(resolve => {
     if (resolverModalPesan) {
-      tutupModalPesanInternal(false);
+      tutupModalPesanInternal(false, false);
     }
     const judul = opsi.judul || "Konfirmasi";
     const teksYa = opsi.teksYa || "Oke";
@@ -112,14 +144,14 @@ function tampilkanKonfirmasi(pesan, opsi = {}) {
     btnBatal.style.display = "inline-block";
     btnBatal.textContent = teksBatal;
     btnBatal.onclick = () => {
-      tutupModalPesanInternal(false);
+      tutupModalPesanInternal(false, false);
       resolve(false);
     };
 
     btnOk.textContent = teksYa;
     btnOk.className = bahaya ? "btn-hapus" : "";
     btnOk.onclick = () => {
-      tutupModalPesanInternal(true);
+      tutupModalPesanInternal(true, false);
       resolve(true);
     };
 
@@ -753,7 +785,7 @@ function escapeHtml(teks) {
     .replace(/"/g, "&quot;");
 }
 
-function susunKeteranganPerubahan(dataLama, dataBaru) {
+function kumpulkanDaftarPerubahan(dataLama, dataBaru) {
   const daftarPerubahan = [];
 
   if ((dataLama.nama || "").trim() !== (dataBaru.nama || "").trim()) {
@@ -781,10 +813,7 @@ function susunKeteranganPerubahan(dataLama, dataBaru) {
     }
   });
 
-  if (daftarPerubahan.length === 0) {
-    return "Data diperbarui (tidak ada perubahan nilai)";
-  }
-  return "Mengedit " + daftarPerubahan.join("; ");
+  return daftarPerubahan;
 }
 
 function renderFormToko(nilaiHarga = {}) {
@@ -899,6 +928,29 @@ async function simpanBarang() {
   try {
     if (modeEdit) {
       const dataLama = semuaBarangCache.find(b => String(b.id) === String(idTargetEdit)) || {};
+      const daftarPerubahan = kumpulkanDaftarPerubahan(dataLama, {
+        nama,
+        kategori,
+        ukuran,
+        satuanUkuran: satuanDipilih,
+        hargaJual,
+        hargaToko
+      });
+
+      if (daftarPerubahan.length === 0) {
+        sedangMenyimpanBarang = false;
+        if (btnSimpan) btnSimpan.disabled = false;
+        perbaruiStatusSync("Tersinkron");
+        tutupModalBarang();
+        await tampilkanAlert("Tidak ada perubahan yang dilakukan.", {
+          judul: "Tidak Ada Perubahan",
+          teksOk: "Selesai",
+          countdownDetik: 5,
+          tutupModalBarangSaatSelesai: true
+        });
+        return;
+      }
+
       const dibuatPadaAwal = dataLama.dibuatPada || waktuSekarang;
       const riwayatLama = Array.isArray(dataLama.riwayatEdit) ? dataLama.riwayatEdit : [];
 
@@ -915,25 +967,19 @@ async function simpanBarang() {
           ...riwayatLama,
           {
             waktuEdit: waktuSekarang,
-            keterangan: susunKeteranganPerubahan(dataLama, {
-              nama,
-              kategori,
-              ukuran,
-              satuanUkuran: satuanDipilih,
-              hargaJual,
-              hargaToko
-            })
+            keterangan: "Mengedit " + daftarPerubahan.join("; ")
           }
         ]
       };
 
       const payload = susunPayloadBarangCloud(dataBaru);
       const hasilPatch = await requestSupabase("barang", "PATCH", payload, `?id=eq.${encodeURIComponent(idTargetEdit)}`);
-      const rowUpdated = Array.isArray(hasilPatch) && hasilPatch[0] ? normalisasiBarisBarangCloud(hasilPatch[0]) : { ...dataBaru, id: idTargetEdit };
+      const rowUpdated = Array.isArray(hasilPatch) && hasilPatch[0]
+        ? normalisasiBarisBarangCloud(hasilPatch[0])
+        : { ...dataBaru, id: idTargetEdit };
 
       semuaBarangCache = semuaBarangCache.map(b => String(b.id) === String(idTargetEdit) ? rowUpdated : b);
       waktuSyncTerakhir = waktuSekarang;
-      tutupModalBarang();
       kategoriAktif = kategori;
       await tampilkanBarang();
       perbaruiStatusSync("Tersinkron");
@@ -941,6 +987,8 @@ async function simpanBarang() {
       if (detailSedangAktif) {
         await bukaDetail(idTargetEdit);
       }
+
+      tutupModalBarang();
     } else {
       const dataBaru = {
         nama,
@@ -956,14 +1004,23 @@ async function simpanBarang() {
 
       const payload = susunPayloadBarangCloud(dataBaru);
       const hasilPost = await requestSupabase("barang", "POST", [payload]);
-      const rowInserted = Array.isArray(hasilPost) && hasilPost[0] ? normalisasiBarisBarangCloud(hasilPost[0]) : { ...dataBaru, id: Date.now() };
+      const rowInserted = Array.isArray(hasilPost) && hasilPost[0]
+        ? normalisasiBarisBarangCloud(hasilPost[0])
+        : { ...dataBaru, id: Date.now() };
 
       semuaBarangCache = [...semuaBarangCache, rowInserted];
       waktuSyncTerakhir = waktuSekarang;
-      tutupModalBarang();
       kategoriAktif = kategori;
       await tampilkanBarang();
       perbaruiStatusSync("Tersinkron");
+
+      await tampilkanAlert(`Data ${nama} dengan ukuran ${ukuran} sudah disimpan.`, {
+        judul: "Berhasil Disimpan",
+        teksOk: "Selesai",
+        countdownDetik: 5,
+        tutupModalBarangSaatSelesai: true
+      });
+      tutupModalBarang();
     }
   } catch (err) {
     perbaruiStatusSync("Gagal simpan");
@@ -1226,6 +1283,12 @@ function editDariDetail() {
 }
 
 async function hapusBarang(id) {
+  const targetItem = semuaBarangCache.find(b => String(b.id) === String(id));
+  const namaItem = (targetItem && targetItem.nama) ? targetItem.nama : "Data";
+  const ukuranItem = targetItem
+    ? susunUkuranGabungan(targetItem.ukuran, targetItem.kategori, targetItem.satuanUkuran)
+    : "-";
+
   const yakin = await tampilkanKonfirmasi("Hapus data ini secara permanen?", {
     judul: "Hapus Data",
     teksYa: "Hapus",
@@ -1234,7 +1297,8 @@ async function hapusBarang(id) {
   });
   if (!yakin) return false;
 
-  // Hapus langsung di UI agar tabel langsung ter-refresh saat alert tertutup
+  const snapshotCache = [...semuaBarangCache];
+  // Hapus langsung dari state & perbarui tabel seketika
   semuaBarangCache = semuaBarangCache.filter(b => String(b.id) !== String(id));
   renderIsiTabel();
   perbaruiStatusSync("Menghapus...");
@@ -1243,10 +1307,18 @@ async function hapusBarang(id) {
     await requestSupabase("barang", "DELETE", null, `?id=eq.${encodeURIComponent(id)}`);
     waktuSyncTerakhir = new Date().toISOString();
     perbaruiStatusSync("Tersinkron");
+
+    await tampilkanAlert(`${namaItem} dengan ukuran ${ukuranItem} sudah berhasil dihapus.`, {
+      judul: "Berhasil Dihapus",
+      teksOk: "Selesai",
+      countdownDetik: 5,
+      tutupModalBarangSaatSelesai: true
+    });
     return true;
   } catch (err) {
+    semuaBarangCache = snapshotCache;
+    renderIsiTabel();
     perbaruiStatusSync("Gagal hapus");
-    await muatDataDariCloud(false, "Gagal hapus");
     await tampilkanAlert(`Gagal menghapus data di Supabase: ${err.message}`, {
       judul: "Gagal Menghapus",
       bahaya: true
