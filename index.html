@@ -180,13 +180,13 @@
       min-width: 0;
       background: #fff;
     }
-    .ukuran-pupuk-grid {
+    .ukuran-satuan-grid {
       display: grid;
-      grid-template-columns: 1fr 130px;
+      grid-template-columns: 1fr 120px;
       gap: 8px;
       align-items: center;
     }
-    #satuan-ukuran-pupuk {
+    .satuan-select {
       background: #fff;
       color: #0f172a;
       opacity: 1;
@@ -481,10 +481,15 @@
     }
 
     .col-nama { min-width: 140px; text-align: left; }
-    .col-ukuran { width: 92px; max-width: 112px; text-align: center; }
+    .col-ukuran { width: 105px; max-width: 130px; text-align: center; }
     .col-harga { width: 102px; max-width: 118px; text-align: right; }
     .col-toko { width: 96px; max-width: 112px; text-align: right; }
     .col-aksi { width: 86px; text-align: center; }
+
+    /* Sembunyikan kolom harga jual saat mode Obat */
+    #tabel-utama.mode-kat-obat .col-harga {
+      display: none;
+    }
 
     @media (max-width: 640px) {
       body { padding: 14px 12px 96px; }
@@ -524,7 +529,7 @@
         line-height: 1.25;
       }
       .col-nama { min-width: 0; text-align: left; }
-      .col-ukuran { width: 78px; max-width: 92px; text-align: center; }
+      .col-ukuran { width: 86px; max-width: 106px; text-align: center; }
       .col-harga { width: 90px; max-width: 102px; text-align: right; }
       .col-toko { width: 84px; max-width: 96px; text-align: right; }
       .col-aksi { display: none; }
@@ -1006,7 +1011,7 @@
       </div>
 
       <div class="detail-section-box">
-        <div class="detail-section-title">Informasi Barang &amp; Harga Jual</div>
+        <div class="detail-section-title" id="detail-judul-info">Informasi Barang &amp; Harga Jual</div>
         <div class="detail-list" id="detail-info-utama"></div>
       </div>
 
@@ -1026,31 +1031,40 @@
 
       <div class="modal-body">
         <div class="modal-section-box">
-          <div class="modal-section-title">Informasi Barang &amp; Harga Jual</div>
+          <div class="modal-section-title" id="modal-judul-info">Informasi Barang &amp; Harga Jual</div>
           <div class="form-stack">
             <div class="form-field">
               <label for="nama">Nama Barang</label>
               <input type="text" id="nama" placeholder="Contoh: Arjuna">
             </div>
+
             <div class="form-field">
-              <label id="label-ukuran-modal" for="ukuran">Ukuran</label>
-              <div id="wadah-ukuran-pupuk" class="ukuran-pupuk-grid" style="display: none;">
-                <input type="text" id="ukuran-pupuk-angka" placeholder="Contoh: 1" disabled>
-                <select id="satuan-ukuran-pupuk" aria-label="Kategori ukuran pupuk" disabled>
+              <label id="label-ukuran-modal" for="ukuran-obat-angka">Ukuran</label>
+              <div id="wadah-ukuran-obat" class="ukuran-satuan-grid">
+                <input type="text" id="ukuran-obat-angka" placeholder="Contoh: 250">
+                <select id="satuan-ukuran-obat" class="satuan-select" aria-label="Satuan ukuran obat">
+                  <option value="ml">ml</option>
+                  <option value="gram">gram</option>
                   <option value="kg">kg</option>
+                </select>
+              </div>
+              <div id="wadah-ukuran-pupuk" class="ukuran-satuan-grid" style="display: none;">
+                <input type="text" id="ukuran-pupuk-angka" placeholder="Contoh: 50" disabled>
+                <select id="satuan-ukuran-pupuk" class="satuan-select" aria-label="Satuan ukuran pupuk" disabled>
                   <option value="sack">sack</option>
                 </select>
               </div>
-              <input type="text" id="ukuran" placeholder="Contoh: 250">
             </div>
+
             <div class="form-field">
               <label for="kategori">Kategori</label>
-              <select id="kategori" onchange="sinkronkanFormPupuk()">
+              <select id="kategori" onchange="sinkronkanFormKategori()">
                 <option value="Obat">Obat</option>
                 <option value="Pupuk">Pupuk</option>
               </select>
             </div>
-            <div class="form-field">
+
+            <div class="form-field" id="wadah-harga-jual">
               <label for="hargaJual">Harga Jual</label>
               <input type="text" id="hargaJual" inputmode="numeric" placeholder="0" oninput="formatInputRibuan(this)">
             </div>

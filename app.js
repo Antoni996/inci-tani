@@ -387,19 +387,68 @@ async function requestSupabase(tabel, method = "GET", body = null, query = "") {
   return teks ? JSON.parse(teks) : [];
 }
 
+function pisahkanUkuranDanSatuan(ukuranTersimpan, kategori = "Obat", satuanTersimpan = "") {
+  const raw = String(ukuranTersimpan || "").trim();
+  const satRaw = String(satuanTersimpan || "").trim().toLowerCase();
+
+  if (kategori === "Pupuk") {
+    const satuanDipakai = "sack";
+    if (!raw || raw === "-") {
+      return { angka: "", satuan: satuanDipakai };
+    }
+    const match = raw.match(/^(.+?)\s*(sack|kg)$/i);
+    if (match) {
+      return { angka: match[1].trim(), satuan: satuanDipakai };
+    }
+    return { angka: raw, satuan: satuanDipakai };
+  }
+
+  const satuanValidObat = ["ml", "gram", "kg"];
+  if (!raw || raw === "-") {
+    return {
+      angka: "",
+      satuan: satuanValidObat.includes(satRaw) ? satRaw : "ml"
+    };
+  }
+
+  const match = raw.match(/^(.+?)\s*(ml|gram|kg)$/i);
+  if (match) {
+    return {
+      angka: match[1].trim(),
+      satuan: match[2].toLowerCase()
+    };
+  }
+
+  return {
+    angka: raw,
+    satuan: satuanValidObat.includes(satRaw) ? satRaw : "ml"
+  };
+}
+
+function susunUkuranGabungan(nilaiUkuran, kategori = "Obat", satuan = "") {
+  const { angka, satuan: satTerurai } = pisahkanUkuranDanSatuan(nilaiUkuran, kategori, satuan);
+  const angkaBersih = String(angka || "").trim();
+  if (!angkaBersih || angkaBersih === "-") return "-";
+  const satuanDipakai = kategori === "Pupuk" ? "sack" : (satTerurai || "ml");
+  return `${angkaBersih} ${satuanDipakai}`;
+}
+
 function normalisasiBarisBarangCloud(row) {
   const kat = row.kategori === "Pupuk" ? "Pupuk" : "Obat";
+  const rawSatuan = row.satuan_ukuran ?? row.satuanUkuran ?? null;
   const satuanUkuran = kat === "Pupuk"
-    ? ((row.satuan_ukuran || row.satuanUkuran) === "sack" ? "sack" : "kg")
-    : null;
+    ? "sack"
+    : (["ml", "gram", "kg"].includes(String(rawSatuan || "").toLowerCase())
+      ? String(rawSatuan).toLowerCase()
+      : pisahkanUkuranDanSatuan(row.ukuran, "Obat", rawSatuan).satuan);
 
   return {
     id: row.id,
     nama: row.nama || "",
     kategori: kat,
-    ukuran: normalisasiUkuran(row.ukuran, kat, satuanUkuran || "kg"),
+    ukuran: susunUkuranGabungan(row.ukuran, kat, satuanUkuran),
     satuanUkuran,
-    hargaJual: Number(row.harga_jual ?? row.hargaJual ?? 0),
+    hargaJual: kat === "Obat" ? 0 : Number(row.harga_jual ?? row.hargaJual ?? 0),
     hargaToko: row.harga_toko || row.hargaToko || {},
     dibuatPada: row.dibuat_pada || row.dibuatPada || null,
     dieditPada: row.diedit_pada || row.dieditPada || null,
@@ -416,12 +465,19 @@ function susunPayloadBarangCloud(data) {
     hargaTokoClean[String(k)] = Number(rawHt[k] || 0);
   });
 
+  const isPupuk = data.kategori === "Pupuk";
+  const satuanSimpan = isPupuk
+    ? "sack"
+    : (["ml", "gram", "kg"].includes(String(data.satuanUkuran || "").toLowerCase())
+      ? String(data.satuanUkuran).toLowerCase()
+      : "ml");
+
   return {
     nama: data.nama,
     kategori: data.kategori,
-    ukuran: data.ukuran,
-    satuan_ukuran: data.satuanUkuran || null,
-    harga_jual: Number(data.hargaJual || 0),
+    ukuran: susunUkuranGabungan(data.ukuran, data.kategori, satuanSimpan),
+    satuan_ukuran: satuanSimpan,
+    harga_jual: isPupuk ? Number(data.hargaJual || 0) : 0,
     harga_toko: hargaTokoClean,
     dibuat_pada: data.dibuatPada || new Date().toISOString(),
     diedit_pada: data.dieditPada || null,
@@ -515,98 +571,67 @@ function ambilLabelNamaKategori(kat = kategoriAktif) {
   return kat === "Pupuk" ? "Nama Pupuk" : "Nama Obat";
 }
 
-function gabungkanUkuranDanSatuan(nilaiUkuran, satuan = "") {
-  const bersih = String(nilaiUkuran || "").trim();
-  if (!bersih || bersih === "-") return "-";
-  const sat = String(satuan || "").trim();
-  if (!sat) return bersih;
-
-  const lowerBersih = bersih.toLowerCase();
-  const lowerSat = sat.toLowerCase();
-  if (lowerBersih.endsWith(lowerSat)) {
-    const angkaSaja = bersih.slice(0, bersih.length - sat.length).trim();
-    return angkaSaja ? `${angkaSaja}${sat}` : bersih;
-  }
-  return `${bersih}${sat}`;
-}
-
-function pisahkanUkuranDanSatuanPupuk(ukuranTersimpan, satuanTersimpan = "") {
-  const raw = String(ukuranTersimpan || "").trim();
-  if (!raw || raw === "-") {
-    return {
-      angka: "",
-      satuan: satuanTersimpan === "sack" ? "sack" : "kg"
-    };
-  }
-  const match = raw.match(/^(.+?)\s*(kg|sack)$/i);
-  if (match) {
-    return {
-      angka: match[1].trim(),
-      satuan: match[2].toLowerCase()
-    };
-  }
-  return {
-    angka: raw,
-    satuan: satuanTersimpan === "sack" ? "sack" : "kg"
-  };
-}
-
-function normalisasiUkuran(uk, kategori = "Obat", satuanPupuk = "kg") {
-  if (kategori === "Pupuk") {
-    const { angka, satuan } = pisahkanUkuranDanSatuanPupuk(uk, satuanPupuk);
-    const satDipakai = satuan === "sack" ? "sack" : "kg";
-    if (!angka) return "-";
-    return gabungkanUkuranDanSatuan(angka, satDipakai);
-  }
-  const bersih = String(uk || "").trim();
-  return bersih === "" ? "-" : bersih;
-}
-
-function formatUkuranDenganSatuanTampil(item) {
-  const kat = item.kategori || "Obat";
-  const ukNorm = normalisasiUkuran(item.ukuran, kat, item.satuanUkuran);
-  if (!ukNorm || ukNorm === "-") return "-";
-  if (kat === "Pupuk") {
-    return ukNorm;
-  }
-  if (/^\d+(?:[.,]\d+)?$/.test(ukNorm)) {
-    return `${ukNorm}ml`;
-  }
-  return ukNorm;
-}
-
-function sinkronkanFormPupuk() {
+function sinkronkanFormKategori() {
   const selectKat = document.getElementById("kategori");
   const kat = selectKat ? selectKat.value : kategoriAktif;
   const isPupuk = kat === "Pupuk";
 
+  const wadahObat = document.getElementById("wadah-ukuran-obat");
+  const inputObatAngka = document.getElementById("ukuran-obat-angka");
+  const selectSatuanObat = document.getElementById("satuan-ukuran-obat");
+
   const wadahPupuk = document.getElementById("wadah-ukuran-pupuk");
-  const inputBiasa = document.getElementById("ukuran");
   const inputPupukAngka = document.getElementById("ukuran-pupuk-angka");
   const selectSatuanPupuk = document.getElementById("satuan-ukuran-pupuk");
 
+  const wadahHargaJual = document.getElementById("wadah-harga-jual");
+  const inputHargaJual = document.getElementById("hargaJual");
+
+  const modalJudulInfo = document.getElementById("modal-judul-info");
+  if (modalJudulInfo) {
+    modalJudulInfo.textContent = isPupuk ? "Informasi Barang & Harga Jual" : "Informasi Barang";
+  }
+
   if (isPupuk) {
+    if (wadahObat) wadahObat.style.display = "none";
+    if (inputObatAngka) inputObatAngka.disabled = true;
+    if (selectSatuanObat) selectSatuanObat.disabled = true;
+
     if (wadahPupuk) wadahPupuk.style.display = "grid";
-    if (inputPupukAngka) inputPupukAngka.disabled = false;
-    if (selectSatuanPupuk) selectSatuanPupuk.disabled = false;
-    if (inputBiasa) {
-      inputBiasa.style.display = "none";
-      inputBiasa.disabled = true;
-      if (inputPupukAngka && inputBiasa.value && !inputPupukAngka.value) {
-        const parsed = pisahkanUkuranDanSatuanPupuk(inputBiasa.value);
-        inputPupukAngka.value = parsed.angka;
+    if (inputPupukAngka) {
+      inputPupukAngka.disabled = false;
+      if (!inputPupukAngka.value && inputObatAngka && inputObatAngka.value) {
+        inputPupukAngka.value = inputObatAngka.value;
       }
     }
+    if (selectSatuanPupuk) {
+      selectSatuanPupuk.disabled = false;
+      selectSatuanPupuk.value = "sack";
+    }
+
+    if (wadahHargaJual) wadahHargaJual.style.display = "block";
+    if (inputHargaJual) inputHargaJual.disabled = false;
   } else {
     if (wadahPupuk) wadahPupuk.style.display = "none";
     if (inputPupukAngka) inputPupukAngka.disabled = true;
     if (selectSatuanPupuk) selectSatuanPupuk.disabled = true;
-    if (inputBiasa) {
-      inputBiasa.style.display = "block";
-      inputBiasa.disabled = false;
-      if (inputPupukAngka && inputPupukAngka.value && !inputBiasa.value) {
-        inputBiasa.value = inputPupukAngka.value;
+
+    if (wadahObat) wadahObat.style.display = "grid";
+    if (inputObatAngka) {
+      inputObatAngka.disabled = false;
+      if (!inputObatAngka.value && inputPupukAngka && inputPupukAngka.value) {
+        inputObatAngka.value = inputPupukAngka.value;
       }
+    }
+    if (selectSatuanObat) {
+      selectSatuanObat.disabled = false;
+      if (!selectSatuanObat.value) selectSatuanObat.value = "ml";
+    }
+
+    if (wadahHargaJual) wadahHargaJual.style.display = "none";
+    if (inputHargaJual) {
+      inputHargaJual.disabled = true;
+      inputHargaJual.value = "";
     }
   }
 }
@@ -710,15 +735,15 @@ function susunKeteranganPerubahan(dataLama, dataBaru) {
   if ((dataLama.nama || "").trim() !== (dataBaru.nama || "").trim()) {
     daftarPerubahan.push(`Nama dari "${dataLama.nama || "-"}" menjadi "${dataBaru.nama || "-"}"`);
   }
-  const ukLama = normalisasiUkuran(dataLama.ukuran, dataLama.kategori, dataLama.satuanUkuran);
-  const ukBaru = normalisasiUkuran(dataBaru.ukuran, dataBaru.kategori, dataBaru.satuanUkuran);
+  const ukLama = susunUkuranGabungan(dataLama.ukuran, dataLama.kategori, dataLama.satuanUkuran);
+  const ukBaru = susunUkuranGabungan(dataBaru.ukuran, dataBaru.kategori, dataBaru.satuanUkuran);
   if (ukLama !== ukBaru) {
     daftarPerubahan.push(`Ukuran dari "${ukLama}" menjadi "${ukBaru}"`);
   }
   if ((dataLama.kategori || "") !== (dataBaru.kategori || "")) {
     daftarPerubahan.push(`Kategori dari "${dataLama.kategori || "-"}" menjadi "${dataBaru.kategori || "-"}"`);
   }
-  if (Number(dataLama.hargaJual || 0) !== Number(dataBaru.hargaJual || 0)) {
+  if (dataBaru.kategori === "Pupuk" && Number(dataLama.hargaJual || 0) !== Number(dataBaru.hargaJual || 0)) {
     daftarPerubahan.push(`Harga Jual dari ${formatRupiah(dataLama.hargaJual)} menjadi ${formatRupiah(dataBaru.hargaJual)}`);
   }
 
@@ -764,7 +789,7 @@ function bukaModalBarang() {
   document.getElementById("btn-simpan-barang").textContent = "Simpan Barang";
   bersihkanFormBarang();
   renderFormToko({});
-  sinkronkanFormPupuk();
+  sinkronkanFormKategori();
   lepasFokusAktif();
   document.getElementById("modal-barang").classList.add("aktif");
 }
@@ -778,9 +803,10 @@ function tutupModalBarang() {
 
 function bersihkanFormBarang() {
   document.getElementById("nama").value = "";
-  document.getElementById("ukuran").value = "";
+  document.getElementById("ukuran-obat-angka").value = "";
+  document.getElementById("satuan-ukuran-obat").value = "ml";
   document.getElementById("ukuran-pupuk-angka").value = "";
-  document.getElementById("satuan-ukuran-pupuk").value = "kg";
+  document.getElementById("satuan-ukuran-pupuk").value = "sack";
   document.getElementById("kategori").value = kategoriAktif;
   document.getElementById("hargaJual").value = "";
 }
@@ -789,17 +815,23 @@ async function simpanBarang() {
   if (sedangMenyimpanBarang) return;
 
   const nama = document.getElementById("nama").value.trim();
-  const kategori = document.getElementById("kategori").value;
-  const satuanPupuk = document.getElementById("satuan-ukuran-pupuk").value || "kg";
-  const inputUkuranMentah = kategori === "Pupuk"
-    ? document.getElementById("ukuran-pupuk-angka").value
-    : document.getElementById("ukuran").value;
-  const ukuran = normalisasiUkuran(inputUkuranMentah, kategori, satuanPupuk);
-  const hargaJual = ambilAngkaMurni(document.getElementById("hargaJual").value);
+  const kategori = document.getElementById("kategori").value === "Pupuk" ? "Pupuk" : "Obat";
+  const isPupuk = kategori === "Pupuk";
 
-  if (!nama || isNaN(hargaJual)) {
-    await tampilkanAlert("Mohon isi minimal Nama Barang dan Harga Jual.", {
-      judul: "Data Belum Lengkap",
+  const satuanDipilih = isPupuk
+    ? "sack"
+    : (document.getElementById("satuan-ukuran-obat").value || "ml");
+  const inputUkuranMentah = isPupuk
+    ? document.getElementById("ukuran-pupuk-angka").value
+    : document.getElementById("ukuran-obat-angka").value;
+
+  const ukuran = susunUkuranGabungan(inputUkuranMentah, kategori, satuanDipilih);
+  const rawHargaJual = isPupuk ? ambilAngkaMurni(document.getElementById("hargaJual").value) : 0;
+  const hargaJual = isNaN(rawHargaJual) ? 0 : rawHargaJual;
+
+  if (!nama) {
+    await tampilkanAlert("Mohon isi Nama terlebih dahulu.", {
+      judul: "Nama Belum Diisi",
       bahaya: true
     });
     return;
@@ -813,7 +845,7 @@ async function simpanBarang() {
     if (modeEdit && String(b.id) === String(idTargetEdit)) return false;
     const samaKategori = b.kategori === kategori;
     const samaNama = (b.nama || "").trim().toLowerCase() === nama.toLowerCase();
-    const ukuranExisting = normalisasiUkuran(b.ukuran, b.kategori, b.satuanUkuran);
+    const ukuranExisting = susunUkuranGabungan(b.ukuran, b.kategori, b.satuanUkuran);
     const samaUkuran = ukuranExisting.toLowerCase() === ukuran.toLowerCase();
     return samaKategori && samaNama && samaUkuran;
   });
@@ -835,7 +867,6 @@ async function simpanBarang() {
   });
 
   const waktuSekarang = new Date().toISOString();
-  const satuanUkuranSimpan = kategori === "Pupuk" ? satuanPupuk : null;
   const btnSimpan = document.getElementById("btn-simpan-barang");
 
   sedangMenyimpanBarang = true;
@@ -852,7 +883,7 @@ async function simpanBarang() {
         nama,
         kategori,
         ukuran,
-        satuanUkuran: satuanUkuranSimpan,
+        satuanUkuran: satuanDipilih,
         hargaJual,
         hargaToko,
         dibuatPada: dibuatPadaAwal,
@@ -865,7 +896,7 @@ async function simpanBarang() {
               nama,
               kategori,
               ukuran,
-              satuanUkuran: satuanUkuranSimpan,
+              satuanUkuran: satuanDipilih,
               hargaJual,
               hargaToko
             })
@@ -888,7 +919,7 @@ async function simpanBarang() {
         nama,
         kategori,
         ukuran,
-        satuanUkuran: satuanUkuranSimpan,
+        satuanUkuran: satuanDipilih,
         hargaJual,
         hargaToko,
         dibuatPada: waktuSekarang,
@@ -920,27 +951,31 @@ function mulaiEdit(id) {
   if (!item) return;
 
   idSedangDiedit = item.id;
-  const katItem = item.kategori || KATEGORI_STATIS[0];
+  const katItem = item.kategori === "Pupuk" ? "Pupuk" : "Obat";
+  const isPupuk = katItem === "Pupuk";
+  const terurai = pisahkanUkuranDanSatuan(item.ukuran === "-" ? "" : item.ukuran, katItem, item.satuanUkuran);
+
   document.getElementById("judul-form-barang").textContent = "Edit";
   document.getElementById("btn-simpan-barang").textContent = "Update Barang";
   document.getElementById("nama").value = item.nama;
   document.getElementById("kategori").value = katItem;
 
-  if (katItem === "Pupuk") {
-    const parsed = pisahkanUkuranDanSatuanPupuk(item.ukuran === "-" ? "" : item.ukuran, item.satuanUkuran);
-    document.getElementById("ukuran-pupuk-angka").value = parsed.angka;
-    document.getElementById("satuan-ukuran-pupuk").value = parsed.satuan;
-    document.getElementById("ukuran").value = parsed.angka;
+  if (isPupuk) {
+    document.getElementById("ukuran-pupuk-angka").value = terurai.angka;
+    document.getElementById("satuan-ukuran-pupuk").value = "sack";
+    document.getElementById("ukuran-obat-angka").value = "";
+    document.getElementById("satuan-ukuran-obat").value = "ml";
+    document.getElementById("hargaJual").value = Number(item.hargaJual || 0).toLocaleString("id-ID");
   } else {
-    document.getElementById("ukuran").value = item.ukuran === "-" ? "" : item.ukuran;
+    document.getElementById("ukuran-obat-angka").value = terurai.angka;
+    document.getElementById("satuan-ukuran-obat").value = terurai.satuan || "ml";
     document.getElementById("ukuran-pupuk-angka").value = "";
-    document.getElementById("satuan-ukuran-pupuk").value = "kg";
+    document.getElementById("satuan-ukuran-pupuk").value = "sack";
+    document.getElementById("hargaJual").value = "";
   }
 
-  document.getElementById("hargaJual").value = Number(item.hargaJual || 0).toLocaleString("id-ID");
-
   renderFormToko(item.hargaToko || {});
-  sinkronkanFormPupuk();
+  sinkronkanFormKategori();
   lepasFokusAktif();
   document.getElementById("modal-barang").classList.add("aktif");
 }
@@ -948,15 +983,15 @@ function mulaiEdit(id) {
 function renderHeaderTabel() {
   const header = document.getElementById("header-tabel");
   const labelNama = ambilLabelNamaKategori(kategoriAktif);
-  const labelUkuran = kategoriAktif === "Obat"
-    ? `Ukuran <span class="header-ket-biasa">(ml/gram)</span>`
-    : "Ukuran";
+  const isPupuk = kategoriAktif === "Pupuk";
 
   let thHtml = `
     <th class="col-nama">${escapeHtml(labelNama)}</th>
-    <th class="col-ukuran"><span class="teks-rata-kanan-kiri">${labelUkuran}</span></th>
-    <th class="col-harga"><span class="teks-rata-kanan-kiri">Harga Jual <span class="header-ket-biasa">(Rp)</span></span></th>
+    <th class="col-ukuran"><span class="teks-rata-kanan-kiri">Ukuran</span></th>
   `;
+  if (isPupuk) {
+    thHtml += `<th class="col-harga"><span class="teks-rata-kanan-kiri">Harga Jual <span class="header-ket-biasa">(Rp)</span></span></th>`;
+  }
   daftarToko.forEach(t => {
     thHtml += `<th class="col-toko"><span class="teks-rata-kanan-kiri">${escapeHtml(t.nama)} <span class="header-ket-biasa">(Rp)</span></span></th>`;
   });
@@ -967,7 +1002,8 @@ function renderHeaderTabel() {
 function renderIsiTabel() {
   const kataKunci = document.getElementById("cari").value.toLowerCase().trim();
   const hurufPilihan = (document.getElementById("filter-huruf").value || "").toLowerCase();
-  const totalKolom = 3 + daftarToko.length + 1;
+  const isPupuk = kategoriAktif === "Pupuk";
+  const totalKolom = (isPupuk ? 3 : 2) + daftarToko.length + 1;
 
   let hasil = semuaBarangCache.filter(item => {
     const namaItem = (item.nama || "").trim();
@@ -983,8 +1019,8 @@ function renderIsiTabel() {
     if (namaA !== namaB) {
       return namaA < namaB ? -1 : 1;
     }
-    const ukA = normalisasiUkuran(a.ukuran, a.kategori, a.satuanUkuran).toLowerCase();
-    const ukB = normalisasiUkuran(b.ukuran, b.kategori, b.satuanUkuran).toLowerCase();
+    const ukA = susunUkuranGabungan(a.ukuran, a.kategori, a.satuanUkuran).toLowerCase();
+    const ukB = susunUkuranGabungan(b.ukuran, b.kategori, b.satuanUkuran).toLowerCase();
     if (ukA === ukB) return 0;
     return ukA < ukB ? -1 : 1;
   });
@@ -1006,17 +1042,21 @@ function renderIsiTabel() {
 
   hasil.forEach(item => {
     const hargaToko = item.hargaToko || {};
-    const ukuranTampil = normalisasiUkuran(item.ukuran, item.kategori, item.satuanUkuran);
+    const ukuranTampil = susunUkuranGabungan(item.ukuran, item.kategori, item.satuanUkuran);
     let tdTokoHtml = "";
     daftarToko.forEach(t => {
       tdTokoHtml += `<td class="col-toko">${formatAngkaToko(hargaToko[t.id] ?? hargaToko[String(t.id)])}</td>`;
     });
 
+    const tdHargaJualHtml = isPupuk
+      ? `<td class="col-harga"><strong>${formatAngkaToko(item.hargaJual)}</strong></td>`
+      : "";
+
     tbody.innerHTML += `
       <tr class="baris-klik" onclick="bukaDetail('${escapeHtml(item.id)}')">
         <td class="col-nama"><strong>${escapeHtml(item.nama)}</strong></td>
         <td class="col-ukuran">${escapeHtml(ukuranTampil)}</td>
-        <td class="col-harga"><strong>${formatAngkaToko(item.hargaJual)}</strong></td>
+        ${tdHargaJualHtml}
         ${tdTokoHtml}
         <td class="col-aksi" onclick="event.stopPropagation()">
           <button type="button" class="btn-hapus btn-kecil" onclick="hapusBarang('${escapeHtml(item.id)}')">Hapus</button>
@@ -1079,9 +1119,10 @@ async function bukaDetail(id) {
   if (!item) return;
 
   idDetailAktif = item.id;
-  const katItem = item.kategori || KATEGORI_STATIS[0];
+  const katItem = item.kategori === "Pupuk" ? "Pupuk" : "Obat";
+  const isPupuk = katItem === "Pupuk";
   const labelNama = ambilLabelNamaKategori(katItem);
-  const ukuranTampil = formatUkuranDenganSatuanTampil(item);
+  const ukuranTampil = susunUkuranGabungan(item.ukuran, katItem, item.satuanUkuran);
   const judulHeaderDetail = ukuranTampil && ukuranTampil !== "-"
     ? `${item.nama} (${ukuranTampil})`
     : item.nama;
@@ -1089,6 +1130,20 @@ async function bukaDetail(id) {
   document.getElementById("halaman-utama").style.display = "none";
   document.getElementById("halaman-detail").style.display = "block";
   document.getElementById("detail-nama").textContent = judulHeaderDetail;
+
+  const detailJudulInfo = document.getElementById("detail-judul-info");
+  if (detailJudulInfo) {
+    detailJudulInfo.textContent = isPupuk ? "Informasi Barang & Harga Jual" : "Informasi Barang";
+  }
+
+  const hargaJualBoxHtml = isPupuk
+    ? `
+      <div class="detail-box">
+        <div class="detail-label">Harga Jual</div>
+        <div class="detail-val">${formatRupiah(item.hargaJual)}</div>
+      </div>
+    `
+    : "";
 
   document.getElementById("detail-info-utama").innerHTML = `
     <div class="detail-box">
@@ -1099,10 +1154,7 @@ async function bukaDetail(id) {
       <div class="detail-label">Ukuran</div>
       <div class="detail-val">${escapeHtml(ukuranTampil)}</div>
     </div>
-    <div class="detail-box">
-      <div class="detail-label">Harga Jual</div>
-      <div class="detail-val">${formatRupiah(item.hargaJual)}</div>
-    </div>
+    ${hargaJualBoxHtml}
     <div class="detail-box">
       <div class="detail-label">Kategori</div>
       <div class="detail-val">${escapeHtml(katItem)}</div>
