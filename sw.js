@@ -1,4 +1,4 @@
-const CACHE_NAME = "inventori-v66"; // <-- Ubah angka versinya setiap kali kode di-update
+const CACHE_NAME = "inventori-v67"; // <-- Ubah angka versinya setiap kali kode di-update
 const ASSETS = [
   "./",
   "./index.html",

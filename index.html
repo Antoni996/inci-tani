@@ -193,6 +193,20 @@
       pointer-events: auto;
       cursor: pointer;
     }
+    .satuan-teks-statis {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 43px;
+      padding: 0 12px;
+      font-size: 15px;
+      font-weight: 600;
+      color: #475569;
+      background: #e2e8f0;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      user-select: none;
+    }
     .toko-inputs {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -486,7 +500,6 @@
     .col-toko { width: 96px; max-width: 112px; text-align: right; }
     .col-aksi { width: 86px; text-align: center; }
 
-    /* Sembunyikan kolom harga jual saat mode Obat */
     #tabel-utama.mode-kat-obat .col-harga {
       display: none;
     }
@@ -930,7 +943,7 @@
       </div>
     </header>
 
-    <!-- Bar Status Penyimpanan Lokal + Sinkronisasi Cloud -->
+    <!-- Bar Status Sinkronisasi Cloud -->
     <div class="status-sync-bar">
       <div class="status-sync-teks" id="status-sync-teks">
         Mode: <strong>Langsung Cloud</strong> &bull; Supabase: <strong>Belum diatur</strong>
@@ -962,7 +975,7 @@
     <!-- Search Bar & Filter Huruf A-Z Tetap Menempel di Bagian Bawah -->
     <div class="bottom-sticky-wrap">
       <div class="bottom-sticky-bar">
-        <input type="text" id="cari" placeholder="Cari nama barang..." oninput="tampilkanBarang()" onkeyup="tampilkanBarang()">
+        <input type="text" id="cari" placeholder="Cari nama..." oninput="tampilkanBarang()" onkeyup="tampilkanBarang()">
         <select id="filter-huruf" onchange="tampilkanBarang()" aria-label="Filter huruf awal">
           <option value="">Huruf: Semua</option>
           <option value="A">A</option>
@@ -1027,14 +1040,14 @@
   <!-- MODAL POP-UP TAMBAH / EDIT BARANG -->
   <div id="modal-barang" class="modal-backdrop">
     <div class="modal-box">
-      <h3 id="judul-form-barang" class="modal-header-divider">Tambah Barang</h3>
+      <h3 id="judul-form-barang" class="modal-header-divider">Tambah</h3>
 
       <div class="modal-body">
         <div class="modal-section-box">
-          <div class="modal-section-title" id="modal-judul-info">Informasi Barang &amp; Harga Jual</div>
+          <div class="modal-section-title" id="modal-judul-info">Informasi Obat</div>
           <div class="form-stack">
             <div class="form-field">
-              <label for="nama">Nama Barang</label>
+              <label id="label-nama-modal" for="nama">Nama Obat</label>
               <input type="text" id="nama" placeholder="Contoh: Arjuna">
             </div>
 
@@ -1050,9 +1063,7 @@
               </div>
               <div id="wadah-ukuran-pupuk" class="ukuran-satuan-grid" style="display: none;">
                 <input type="text" id="ukuran-pupuk-angka" placeholder="Contoh: 50" disabled>
-                <select id="satuan-ukuran-pupuk" class="satuan-select" aria-label="Satuan ukuran pupuk" disabled>
-                  <option value="sack">sack</option>
-                </select>
+                <span class="satuan-teks-statis" aria-label="Satuan ukuran pupuk">sack</span>
               </div>
             </div>
 
@@ -1079,7 +1090,7 @@
 
       <div class="modal-footer">
         <button type="button" class="btn-sekunder" onclick="tutupModalBarang()">Batal</button>
-        <button type="button" id="btn-simpan-barang" onclick="simpanBarang()">Simpan Barang</button>
+        <button type="button" id="btn-simpan-barang" onclick="simpanBarang()">Simpan</button>
       </div>
     </div>
   </div>

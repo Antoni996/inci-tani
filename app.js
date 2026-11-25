@@ -2,6 +2,7 @@ const KATEGORI_STATIS = ["Obat", "Pupuk"];
 const TOKO_DEFAULT = ["Toko A", "Toko B"];
 const STORAGE_KEY_CLOUD = "inci_tani_cloud_config_v1";
 const STORAGE_KEY_SESSION = "inci_tani_auth_session_v1";
+const INTERVAL_SINKRON_MS = 5 * 60 * 1000; // 5 menit
 
 // Isi dengan Project URL dan Publishable / anon key dari Supabase kamu
 const CLOUD_DEFAULT = {
@@ -22,6 +23,7 @@ let sedangMemuat = false;
 let sedangMenyimpanBarang = false;
 let sesiAuth = null;
 let resolverModalPesan = null;
+let timerSinkronOtomatis = null;
 
 function setIkonModalPesan(bahaya = false) {
   const badge = document.getElementById("pesan-modal-ikon");
@@ -125,6 +127,24 @@ function tampilkanKonfirmasi(pesan, opsi = {}) {
     lepasFokusAktif();
     document.getElementById("modal-pesan").classList.add("aktif");
   });
+}
+
+function mulaiSinkronOtomatisLimaMenit() {
+  if (timerSinkronOtomatis) {
+    clearInterval(timerSinkronOtomatis);
+  }
+  timerSinkronOtomatis = setInterval(() => {
+    if (
+      document.visibilityState === "visible" &&
+      navigator.onLine &&
+      cloudSudahDiatur() &&
+      muatSesiAuth() &&
+      !sedangMemuat &&
+      !sedangMenyimpanBarang
+    ) {
+      muatDataDariCloud(false, "Auto-sync");
+    }
+  }, INTERVAL_SINKRON_MS);
 }
 
 function ambilKonfigurasiCloud() {
@@ -284,6 +304,7 @@ async function prosesLogin(event) {
     document.getElementById("login-password").value = "";
     tampilkanHalamanAplikasi();
     await muatDataDariCloud(false);
+    mulaiSinkronOtomatisLimaMenit();
   } catch (err) {
     if (elPesan) {
       elPesan.textContent = err.message || "Gagal masuk.";
@@ -328,7 +349,7 @@ function perbaruiStatusSync(labelStatus = null) {
   let cloudTeks = "<strong>Belum diatur</strong>";
   if (terhubung) {
     if (sedangMemuat) {
-      cloudTeks = "<strong>Memuat data...</strong>";
+      cloudTeks = "<strong>Menyinkronkan...</strong>";
     } else if (!online) {
       cloudTeks = "<strong>Offline</strong> (butuh internet)";
     } else if (labelStatus) {
@@ -339,7 +360,7 @@ function perbaruiStatusSync(labelStatus = null) {
   }
 
   const waktuTeks = waktuSyncTerakhir
-    ? ` &bull; Terakhir: ${escapeHtml(formatWaktu(waktuSyncTerakhir))}`
+    ? ` &bull; Sinkron: ${escapeHtml(formatWaktu(waktuSyncTerakhir))}`
     : "";
 
   el.innerHTML = `Mode: <strong>Langsung Cloud</strong> &bull; Supabase: ${cloudTeks}${waktuTeks}`;
@@ -485,7 +506,7 @@ function susunPayloadBarangCloud(data) {
   };
 }
 
-async function muatDataDariCloud(tampilkanPesan = false) {
+async function muatDataDariCloud(tampilkanPesan = false, labelSukses = "Tersinkron") {
   if (!cloudSudahDiatur()) {
     perbaruiStatusSync();
     if (tampilkanPesan) {
@@ -515,7 +536,7 @@ async function muatDataDariCloud(tampilkanPesan = false) {
 
   if (sedangMemuat) return false;
   sedangMemuat = true;
-  perbaruiStatusSync("Memuat data...");
+  perbaruiStatusSync();
 
   try {
     let tokoRows = await requestSupabase("toko", "GET", null, "?select=*&order=id.asc");
@@ -535,30 +556,30 @@ async function muatDataDariCloud(tampilkanPesan = false) {
     waktuSyncTerakhir = new Date().toISOString();
 
     await tampilkanBarang();
-    perbaruiStatusSync("Tersinkron");
+    sedangMemuat = false;
+    perbaruiStatusSync(labelSukses);
 
     if (tampilkanPesan) {
-      await tampilkanAlert("Data berhasil dimuat dari Supabase.", {
+      await tampilkanAlert("Data berhasil disinkronkan dengan Supabase.", {
         judul: "Sinkronisasi Berhasil"
       });
     }
     return true;
   } catch (err) {
-    perbaruiStatusSync("Gagal memuat");
+    sedangMemuat = false;
+    perbaruiStatusSync("Gagal sinkron");
     if (tampilkanPesan) {
-      await tampilkanAlert(`Gagal memuat data dari Supabase: ${err.message}`, {
+      await tampilkanAlert(`Gagal menyinkronkan data dengan Supabase: ${err.message}`, {
         judul: "Gagal Sinkronisasi",
         bahaya: true
       });
     }
     return false;
-  } finally {
-    sedangMemuat = false;
   }
 }
 
 async function sinkronkanSekarang(tampilkanPesan = false) {
-  return muatDataDariCloud(tampilkanPesan);
+  return muatDataDariCloud(tampilkanPesan, "Tersinkron");
 }
 
 function lepasFokusAktif() {
@@ -576,20 +597,28 @@ function sinkronkanFormKategori() {
   const kat = selectKat ? selectKat.value : kategoriAktif;
   const isPupuk = kat === "Pupuk";
 
+  const labelNamaModal = document.getElementById("label-nama-modal");
+  const inputNama = document.getElementById("nama");
+  if (labelNamaModal) {
+    labelNamaModal.textContent = ambilLabelNamaKategori(kat);
+  }
+  if (inputNama) {
+    inputNama.placeholder = isPupuk ? "Contoh: Urea" : "Contoh: Arjuna";
+  }
+
   const wadahObat = document.getElementById("wadah-ukuran-obat");
   const inputObatAngka = document.getElementById("ukuran-obat-angka");
   const selectSatuanObat = document.getElementById("satuan-ukuran-obat");
 
   const wadahPupuk = document.getElementById("wadah-ukuran-pupuk");
   const inputPupukAngka = document.getElementById("ukuran-pupuk-angka");
-  const selectSatuanPupuk = document.getElementById("satuan-ukuran-pupuk");
 
   const wadahHargaJual = document.getElementById("wadah-harga-jual");
   const inputHargaJual = document.getElementById("hargaJual");
 
   const modalJudulInfo = document.getElementById("modal-judul-info");
   if (modalJudulInfo) {
-    modalJudulInfo.textContent = isPupuk ? "Informasi Barang & Harga Jual" : "Informasi Barang";
+    modalJudulInfo.textContent = isPupuk ? "Informasi Pupuk & Harga Jual" : "Informasi Obat";
   }
 
   if (isPupuk) {
@@ -604,17 +633,12 @@ function sinkronkanFormKategori() {
         inputPupukAngka.value = inputObatAngka.value;
       }
     }
-    if (selectSatuanPupuk) {
-      selectSatuanPupuk.disabled = false;
-      selectSatuanPupuk.value = "sack";
-    }
 
     if (wadahHargaJual) wadahHargaJual.style.display = "block";
     if (inputHargaJual) inputHargaJual.disabled = false;
   } else {
     if (wadahPupuk) wadahPupuk.style.display = "none";
     if (inputPupukAngka) inputPupukAngka.disabled = true;
-    if (selectSatuanPupuk) selectSatuanPupuk.disabled = true;
 
     if (wadahObat) wadahObat.style.display = "grid";
     if (inputObatAngka) {
@@ -785,8 +809,8 @@ function renderFormToko(nilaiHarga = {}) {
 
 function bukaModalBarang() {
   idSedangDiedit = null;
-  document.getElementById("judul-form-barang").textContent = "Tambah Barang";
-  document.getElementById("btn-simpan-barang").textContent = "Simpan Barang";
+  document.getElementById("judul-form-barang").textContent = "Tambah";
+  document.getElementById("btn-simpan-barang").textContent = "Simpan";
   bersihkanFormBarang();
   renderFormToko({});
   sinkronkanFormKategori();
@@ -806,7 +830,6 @@ function bersihkanFormBarang() {
   document.getElementById("ukuran-obat-angka").value = "";
   document.getElementById("satuan-ukuran-obat").value = "ml";
   document.getElementById("ukuran-pupuk-angka").value = "";
-  document.getElementById("satuan-ukuran-pupuk").value = "sack";
   document.getElementById("kategori").value = kategoriAktif;
   document.getElementById("hargaJual").value = "";
 }
@@ -905,11 +928,15 @@ async function simpanBarang() {
       };
 
       const payload = susunPayloadBarangCloud(dataBaru);
-      await requestSupabase("barang", "PATCH", payload, `?id=eq.${encodeURIComponent(idTargetEdit)}`);
+      const hasilPatch = await requestSupabase("barang", "PATCH", payload, `?id=eq.${encodeURIComponent(idTargetEdit)}`);
+      const rowUpdated = Array.isArray(hasilPatch) && hasilPatch[0] ? normalisasiBarisBarangCloud(hasilPatch[0]) : { ...dataBaru, id: idTargetEdit };
 
+      semuaBarangCache = semuaBarangCache.map(b => String(b.id) === String(idTargetEdit) ? rowUpdated : b);
+      waktuSyncTerakhir = waktuSekarang;
       tutupModalBarang();
       kategoriAktif = kategori;
-      await muatDataDariCloud(false);
+      await tampilkanBarang();
+      perbaruiStatusSync("Tersinkron");
 
       if (detailSedangAktif) {
         await bukaDetail(idTargetEdit);
@@ -928,11 +955,15 @@ async function simpanBarang() {
       };
 
       const payload = susunPayloadBarangCloud(dataBaru);
-      await requestSupabase("barang", "POST", [payload]);
+      const hasilPost = await requestSupabase("barang", "POST", [payload]);
+      const rowInserted = Array.isArray(hasilPost) && hasilPost[0] ? normalisasiBarisBarangCloud(hasilPost[0]) : { ...dataBaru, id: Date.now() };
 
+      semuaBarangCache = [...semuaBarangCache, rowInserted];
+      waktuSyncTerakhir = waktuSekarang;
       tutupModalBarang();
       kategoriAktif = kategori;
-      await muatDataDariCloud(false);
+      await tampilkanBarang();
+      perbaruiStatusSync("Tersinkron");
     }
   } catch (err) {
     perbaruiStatusSync("Gagal simpan");
@@ -956,13 +987,12 @@ function mulaiEdit(id) {
   const terurai = pisahkanUkuranDanSatuan(item.ukuran === "-" ? "" : item.ukuran, katItem, item.satuanUkuran);
 
   document.getElementById("judul-form-barang").textContent = "Edit";
-  document.getElementById("btn-simpan-barang").textContent = "Update Barang";
+  document.getElementById("btn-simpan-barang").textContent = "Update";
   document.getElementById("nama").value = item.nama;
   document.getElementById("kategori").value = katItem;
 
   if (isPupuk) {
     document.getElementById("ukuran-pupuk-angka").value = terurai.angka;
-    document.getElementById("satuan-ukuran-pupuk").value = "sack";
     document.getElementById("ukuran-obat-angka").value = "";
     document.getElementById("satuan-ukuran-obat").value = "ml";
     document.getElementById("hargaJual").value = Number(item.hargaJual || 0).toLocaleString("id-ID");
@@ -970,7 +1000,6 @@ function mulaiEdit(id) {
     document.getElementById("ukuran-obat-angka").value = terurai.angka;
     document.getElementById("satuan-ukuran-obat").value = terurai.satuan || "ml";
     document.getElementById("ukuran-pupuk-angka").value = "";
-    document.getElementById("satuan-ukuran-pupuk").value = "sack";
     document.getElementById("hargaJual").value = "";
   }
 
@@ -1033,7 +1062,7 @@ function renderIsiTabel() {
     tbody.innerHTML = `
       <tr>
         <td colspan="${totalKolom}" style="text-align: center; color: #64748b; padding: 18px;">
-          Belum ada barang di tab "${escapeHtml(kategoriAktif)}"${infoHuruf}.
+          Belum ada data di tab "${escapeHtml(kategoriAktif)}"${infoHuruf}.
         </td>
       </tr>
     `;
@@ -1133,7 +1162,7 @@ async function bukaDetail(id) {
 
   const detailJudulInfo = document.getElementById("detail-judul-info");
   if (detailJudulInfo) {
-    detailJudulInfo.textContent = isPupuk ? "Informasi Barang & Harga Jual" : "Informasi Barang";
+    detailJudulInfo.textContent = isPupuk ? "Informasi Pupuk & Harga Jual" : "Informasi Obat";
   }
 
   const hargaJualBoxHtml = isPupuk
@@ -1197,29 +1226,32 @@ function editDariDetail() {
 }
 
 async function hapusBarang(id) {
-  const yakin = await tampilkanKonfirmasi("Hapus barang ini secara permanen?", {
-    judul: "Hapus Barang",
+  const yakin = await tampilkanKonfirmasi("Hapus data ini secara permanen?", {
+    judul: "Hapus Data",
     teksYa: "Hapus",
     teksBatal: "Batal",
     bahaya: true
   });
   if (!yakin) return false;
 
+  // Hapus langsung di UI agar tabel langsung ter-refresh saat alert tertutup
+  semuaBarangCache = semuaBarangCache.filter(b => String(b.id) !== String(id));
+  renderIsiTabel();
+  perbaruiStatusSync("Menghapus...");
+
   try {
-    sedangMemuat = true;
-    perbaruiStatusSync("Menghapus...");
     await requestSupabase("barang", "DELETE", null, `?id=eq.${encodeURIComponent(id)}`);
-    await muatDataDariCloud(false);
+    waktuSyncTerakhir = new Date().toISOString();
+    perbaruiStatusSync("Tersinkron");
     return true;
   } catch (err) {
     perbaruiStatusSync("Gagal hapus");
-    await tampilkanAlert(`Gagal menghapus barang di Supabase: ${err.message}`, {
+    await muatDataDariCloud(false, "Gagal hapus");
+    await tampilkanAlert(`Gagal menghapus data di Supabase: ${err.message}`, {
       judul: "Gagal Menghapus",
       bahaya: true
     });
     return false;
-  } finally {
-    sedangMemuat = false;
   }
 }
 
@@ -1390,7 +1422,7 @@ async function simpanPerubahanToko() {
 
     tutupModalTokoLangsung();
     sedangMemuat = false;
-    await muatDataDariCloud(false);
+    await muatDataDariCloud(false, "Tersinkron");
   } catch (err) {
     sedangMemuat = false;
     perbaruiStatusSync("Gagal simpan");
@@ -1414,13 +1446,14 @@ async function inisialisasiAplikasi() {
   }
 
   tampilkanHalamanAplikasi();
-  await muatDataDariCloud(false);
+  await muatDataDariCloud(false, "Tersinkron");
+  mulaiSinkronOtomatisLimaMenit();
 }
 
 window.addEventListener("online", () => {
   perbaruiStatusSync("Online");
   if (cloudSudahDiatur() && muatSesiAuth()) {
-    muatDataDariCloud(false);
+    muatDataDariCloud(false, "Tersinkron");
   }
 });
 
