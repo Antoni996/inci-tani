@@ -772,7 +772,7 @@
       border-top: 1px solid #e2e8f0;
     }
     .pesan-modal-actions button {
-      min-width: 96px;
+      min-width: 112px;
       padding: 10px 16px;
       font-size: 15px;
       border-radius: 10px;
@@ -1054,7 +1054,7 @@
             <div class="form-field">
               <label id="label-ukuran-modal" for="ukuran-obat-angka">Ukuran</label>
               <div id="wadah-ukuran-obat" class="ukuran-satuan-grid">
-                <input type="text" id="ukuran-obat-angka" placeholder="Contoh: 250">
+                <input type="number" id="ukuran-obat-angka" min="0" step="any" inputmode="decimal" placeholder="Contoh: 250" oninput="bersihkanInputAngkaUkuran(this)">
                 <select id="satuan-ukuran-obat" class="satuan-select" aria-label="Satuan ukuran obat">
                   <option value="ml">ml</option>
                   <option value="gram">gram</option>
@@ -1062,7 +1062,7 @@
                 </select>
               </div>
               <div id="wadah-ukuran-pupuk" class="ukuran-satuan-grid" style="display: none;">
-                <input type="text" id="ukuran-pupuk-angka" placeholder="Contoh: 50" disabled>
+                <input type="number" id="ukuran-pupuk-angka" min="0" step="any" inputmode="decimal" placeholder="Contoh: 50" oninput="bersihkanInputAngkaUkuran(this)" disabled>
                 <span class="satuan-teks-statis" aria-label="Satuan ukuran pupuk">sack</span>
               </div>
             </div>

@@ -7,7 +7,7 @@ const INTERVAL_SINKRON_MS = 5 * 60 * 1000; // 5 menit
 // Isi dengan Project URL dan Publishable / anon key dari Supabase kamu
 const CLOUD_DEFAULT = {
   url: "https://svcsyhuvmwvtymareyxu.supabase.co",
-  anonKey: "sb_publishable_0H2j4ltoC9aqs25kDhFohw_hC6oOg7a"
+  anonKey: ""
 };
 
 let daftarToko = [];
@@ -440,6 +440,18 @@ async function requestSupabase(tabel, method = "GET", body = null, query = "") {
   return teks ? JSON.parse(teks) : [];
 }
 
+function bersihkanInputAngkaUkuran(input) {
+  if (!input) return;
+  let val = String(input.value || "").replace(/[^0-9.,]/g, "").replace(/,/g, ".");
+  const bagian = val.split(".");
+  if (bagian.length > 2) {
+    val = `${bagian[0]}.${bagian.slice(1).join("")}`;
+  }
+  if (input.value !== val) {
+    input.value = val;
+  }
+}
+
 function pisahkanUkuranDanSatuan(ukuranTersimpan, kategori = "Obat", satuanTersimpan = "") {
   const raw = String(ukuranTersimpan || "").trim();
   const satRaw = String(satuanTersimpan || "").trim().toLowerCase();
@@ -449,11 +461,12 @@ function pisahkanUkuranDanSatuan(ukuranTersimpan, kategori = "Obat", satuanTersi
     if (!raw || raw === "-") {
       return { angka: "", satuan: satuanDipakai };
     }
-    const match = raw.match(/^(.+?)\s*(sack|kg)$/i);
+    const match = raw.match(/^([0-9]+(?:[.,][0-9]+)?)\s*(sack|kg)?$/i);
     if (match) {
-      return { angka: match[1].trim(), satuan: satuanDipakai };
+      return { angka: match[1].replace(",", "."), satuan: satuanDipakai };
     }
-    return { angka: raw, satuan: satuanDipakai };
+    const angkaSaja = raw.replace(/[^0-9.,]/g, "").replace(",", ".");
+    return { angka: angkaSaja, satuan: satuanDipakai };
   }
 
   const satuanValidObat = ["ml", "gram", "kg"];
@@ -464,16 +477,19 @@ function pisahkanUkuranDanSatuan(ukuranTersimpan, kategori = "Obat", satuanTersi
     };
   }
 
-  const match = raw.match(/^(.+?)\s*(ml|gram|kg)$/i);
+  const match = raw.match(/^([0-9]+(?:[.,][0-9]+)?)\s*(ml|gram|kg)?$/i);
   if (match) {
     return {
-      angka: match[1].trim(),
-      satuan: match[2].toLowerCase()
+      angka: match[1].replace(",", "."),
+      satuan: match[2] && satuanValidObat.includes(match[2].toLowerCase())
+        ? match[2].toLowerCase()
+        : (satuanValidObat.includes(satRaw) ? satRaw : "ml")
     };
   }
 
+  const angkaSaja = raw.replace(/[^0-9.,]/g, "").replace(",", ".");
   return {
-    angka: raw,
+    angka: angkaSaja,
     satuan: satuanValidObat.includes(satRaw) ? satRaw : "ml"
   };
 }
@@ -873,9 +889,11 @@ async function simpanBarang() {
   const satuanDipilih = isPupuk
     ? "sack"
     : (document.getElementById("satuan-ukuran-obat").value || "ml");
-  const inputUkuranMentah = isPupuk
-    ? document.getElementById("ukuran-pupuk-angka").value
-    : document.getElementById("ukuran-obat-angka").value;
+  const inputUkuranEl = isPupuk
+    ? document.getElementById("ukuran-pupuk-angka")
+    : document.getElementById("ukuran-obat-angka");
+  bersihkanInputAngkaUkuran(inputUkuranEl);
+  const inputUkuranMentah = inputUkuranEl ? inputUkuranEl.value : "";
 
   const ukuran = susunUkuranGabungan(inputUkuranMentah, kategori, satuanDipilih);
   const rawHargaJual = isPupuk ? ambilAngkaMurni(document.getElementById("hargaJual").value) : 0;
@@ -941,13 +959,13 @@ async function simpanBarang() {
         sedangMenyimpanBarang = false;
         if (btnSimpan) btnSimpan.disabled = false;
         perbaruiStatusSync("Tersinkron");
-        tutupModalBarang();
         await tampilkanAlert("Tidak ada perubahan yang dilakukan.", {
           judul: "Tidak Ada Perubahan",
           teksOk: "Selesai",
           countdownDetik: 5,
           tutupModalBarangSaatSelesai: true
         });
+        tutupModalBarang();
         return;
       }
 
@@ -988,6 +1006,12 @@ async function simpanBarang() {
         await bukaDetail(idTargetEdit);
       }
 
+      await tampilkanAlert(`Data ${nama} dengan ukuran ${ukuran} berhasil diperbarui.`, {
+        judul: "Berhasil Diperbarui",
+        teksOk: "Selesai",
+        countdownDetik: 5,
+        tutupModalBarangSaatSelesai: true
+      });
       tutupModalBarang();
     } else {
       const dataBaru = {
@@ -1437,13 +1461,46 @@ async function hapusToko(id) {
     });
     return;
   }
-  const yakin = await tampilkanKonfirmasi("Hapus toko ini dari daftar?", {
-    judul: "Hapus Toko",
-    teksYa: "Hapus",
-    teksBatal: "Batal",
-    bahaya: true
-  });
-  if (!yakin) return;
+
+  const targetToko = draftToko.find(t => String(t.id) === String(id));
+  const namaToko = (targetToko && targetToko.nama && targetToko.nama.trim()) || "toko ini";
+
+  const itemBernilai = [];
+  if (targetToko && !targetToko.isBaru) {
+    semuaBarangCache.forEach(b => {
+      const ht = b.hargaToko || {};
+      const nilai = Number(ht[id] ?? ht[String(id)] ?? 0);
+      if (nilai > 0) {
+        const uk = susunUkuranGabungan(b.ukuran, b.kategori, b.satuanUkuran);
+        const labelUk = uk && uk !== "-" ? ` (${uk})` : "";
+        itemBernilai.push(`${b.nama || "Item"}${labelUk}: ${formatRupiah(nilai)}`);
+      }
+    });
+  }
+
+  if (itemBernilai.length > 0) {
+    const daftarRingkas = itemBernilai.slice(0, 8).join("\n• ");
+    const sisaCount = itemBernilai.length > 8 ? `\n• ...dan ${itemBernilai.length - 8} item lainnya` : "";
+    const yakin = await tampilkanKonfirmasi(
+      `Di ${namaToko} masih ada data harga yang tersimpan:\n• ${daftarRingkas}${sisaCount}\n\nApakah ingin benar-benar dihapus toko ini?`,
+      {
+        judul: "Masih Ada Data Harga",
+        teksYa: "Hapus",
+        teksBatal: "Batal",
+        bahaya: true
+      }
+    );
+    if (!yakin) return;
+  } else {
+    const yakin = await tampilkanKonfirmasi(`Hapus ${namaToko} dari daftar?`, {
+      judul: "Hapus Toko",
+      teksYa: "Hapus",
+      teksBatal: "Batal",
+      bahaya: true
+    });
+    if (!yakin) return;
+  }
+
   draftToko = draftToko.filter(t => String(t.id) !== String(id));
   renderListEditToko();
 }
@@ -1495,6 +1552,12 @@ async function simpanPerubahanToko() {
     tutupModalTokoLangsung();
     sedangMemuat = false;
     await muatDataDariCloud(false, "Tersinkron");
+
+    await tampilkanAlert("Perubahan toko berhasil disimpan.", {
+      judul: "Berhasil Disimpan",
+      teksOk: "Selesai",
+      countdownDetik: 5
+    });
   } catch (err) {
     sedangMemuat = false;
     perbaruiStatusSync("Gagal simpan");
