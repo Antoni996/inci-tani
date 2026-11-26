@@ -576,6 +576,10 @@
       position: sticky;
       top: 0;
       z-index: 25;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
       margin: -16px -16px 14px;
       padding: 12px 16px;
       background: rgba(248, 250, 252, 0.96);
@@ -1012,13 +1016,25 @@
   <!-- HALAMAN DETAIL BARANG -->
   <div id="halaman-detail">
     <div class="detail-sticky-header">
-      <button type="button" class="btn-sekunder" onclick="tutupDetail()">&lt;- Kembali ke Daftar</button>
+      <button type="button" class="btn-sekunder btn-icon" onclick="tutupDetail()" aria-label="Kembali ke Daftar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+        <span>Kembali ke Daftar</span>
+      </button>
+      <button type="button" class="btn-icon" onclick="editDariDetail()" aria-label="Ubah">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+        </svg>
+        <span>Ubah</span>
+      </button>
     </div>
     <div class="card">
       <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
         <h2 id="detail-nama" style="margin: 0; font-size: 22px;">Detail Barang</h2>
         <div>
-          <button type="button" onclick="editDariDetail()">Edit</button>
           <button type="button" class="btn-hapus" id="detail-btn-hapus">Hapus</button>
         </div>
       </div>
