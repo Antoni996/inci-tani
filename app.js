@@ -7,7 +7,7 @@ const INTERVAL_SINKRON_MS = 5 * 60 * 1000; // 5 menit
 // Isi dengan Project URL dan Publishable / anon key dari Supabase kamu
 const CLOUD_DEFAULT = {
   url: "https://svcsyhuvmwvtymareyxu.supabase.co",
-  anonKey: ""
+  anonKey: "sb_publishable_0H2j4ltoC9aqs25kDhFohw_hC6oOg7a"
 };
 
 let daftarToko = [];
@@ -442,11 +442,7 @@ async function requestSupabase(tabel, method = "GET", body = null, query = "") {
 
 function bersihkanInputAngkaUkuran(input) {
   if (!input) return;
-  let val = String(input.value || "").replace(/[^0-9.,]/g, "").replace(/,/g, ".");
-  const bagian = val.split(".");
-  if (bagian.length > 2) {
-    val = `${bagian[0]}.${bagian.slice(1).join("")}`;
-  }
+  const val = String(input.value || "").replace(/[^0-9]/g, "");
   if (input.value !== val) {
     input.value = val;
   }
@@ -461,11 +457,11 @@ function pisahkanUkuranDanSatuan(ukuranTersimpan, kategori = "Obat", satuanTersi
     if (!raw || raw === "-") {
       return { angka: "", satuan: satuanDipakai };
     }
-    const match = raw.match(/^([0-9]+(?:[.,][0-9]+)?)\s*(sack|kg)?$/i);
+    const match = raw.match(/^([0-9]+)\s*(sack|kg)?$/i);
     if (match) {
-      return { angka: match[1].replace(",", "."), satuan: satuanDipakai };
+      return { angka: match[1], satuan: satuanDipakai };
     }
-    const angkaSaja = raw.replace(/[^0-9.,]/g, "").replace(",", ".");
+    const angkaSaja = raw.replace(/[^0-9]/g, "");
     return { angka: angkaSaja, satuan: satuanDipakai };
   }
 
@@ -477,17 +473,17 @@ function pisahkanUkuranDanSatuan(ukuranTersimpan, kategori = "Obat", satuanTersi
     };
   }
 
-  const match = raw.match(/^([0-9]+(?:[.,][0-9]+)?)\s*(ml|gram|kg)?$/i);
+  const match = raw.match(/^([0-9]+)\s*(ml|gram|kg)?$/i);
   if (match) {
     return {
-      angka: match[1].replace(",", "."),
+      angka: match[1],
       satuan: match[2] && satuanValidObat.includes(match[2].toLowerCase())
         ? match[2].toLowerCase()
         : (satuanValidObat.includes(satRaw) ? satRaw : "ml")
     };
   }
 
-  const angkaSaja = raw.replace(/[^0-9.,]/g, "").replace(",", ".");
+  const angkaSaja = raw.replace(/[^0-9]/g, "");
   return {
     angka: angkaSaja,
     satuan: satuanValidObat.includes(satRaw) ? satRaw : "ml"
@@ -1452,6 +1448,33 @@ async function tambahTokoBaru() {
   renderListEditToko();
 }
 
+function ambilNilaiTokoPadaBarang(hargaTokoObj, tokoObj, rawId) {
+  if (!hargaTokoObj || typeof hargaTokoObj !== "object") return 0;
+
+  const kandidatKey = [
+    String(rawId),
+    String(Number(rawId))
+  ];
+  if (tokoObj && tokoObj.nama) {
+    kandidatKey.push(String(tokoObj.nama));
+  }
+
+  for (const key of kandidatKey) {
+    if (Object.prototype.hasOwnProperty.call(hargaTokoObj, key)) {
+      const val = ambilAngkaMurni(hargaTokoObj[key]);
+      if (!isNaN(val) && val > 0) {
+        return val;
+      }
+      const numVal = Number(hargaTokoObj[key]);
+      if (!isNaN(numVal) && numVal > 0) {
+        return numVal;
+      }
+    }
+  }
+
+  return 0;
+}
+
 async function hapusToko(id) {
   sinkronkanInputDraftToko();
   if (draftToko.length <= 1) {
@@ -1466,25 +1489,22 @@ async function hapusToko(id) {
   const namaToko = (targetToko && targetToko.nama && targetToko.nama.trim()) || "toko ini";
 
   const itemBernilai = [];
-  if (targetToko && !targetToko.isBaru) {
-    semuaBarangCache.forEach(b => {
-      const ht = b.hargaToko || {};
-      const nilai = Number(ht[id] ?? ht[String(id)] ?? 0);
-      if (nilai > 0) {
-        const uk = susunUkuranGabungan(b.ukuran, b.kategori, b.satuanUkuran);
-        const labelUk = uk && uk !== "-" ? ` (${uk})` : "";
-        itemBernilai.push(`${b.nama || "Item"}${labelUk}: ${formatRupiah(nilai)}`);
-      }
-    });
-  }
+  semuaBarangCache.forEach(b => {
+    const nilai = ambilNilaiTokoPadaBarang(b.hargaToko || {}, targetToko, id);
+    if (nilai > 0) {
+      const uk = susunUkuranGabungan(b.ukuran, b.kategori, b.satuanUkuran);
+      const labelUk = uk && uk !== "-" ? ` (${uk})` : "";
+      itemBernilai.push(`${b.nama || "Item"}${labelUk}: ${formatRupiah(nilai)}`);
+    }
+  });
 
   if (itemBernilai.length > 0) {
     const daftarRingkas = itemBernilai.slice(0, 8).join("\n• ");
     const sisaCount = itemBernilai.length > 8 ? `\n• ...dan ${itemBernilai.length - 8} item lainnya` : "";
     const yakin = await tampilkanKonfirmasi(
-      `Di ${namaToko} masih ada data harga yang tersimpan:\n• ${daftarRingkas}${sisaCount}\n\nApakah ingin benar-benar dihapus toko ini?`,
+      `Apakah akan menghapus ${namaToko}, karena di barang tertentu masih menyimpan data:\n• ${daftarRingkas}${sisaCount}\n\nPilih Hapus jika ingin benar-benar dihapus, atau Batal untuk membatalkan.`,
       {
-        judul: "Masih Ada Data Harga",
+        judul: "Konfirmasi Hapus Toko",
         teksYa: "Hapus",
         teksBatal: "Batal",
         bahaya: true
@@ -1492,7 +1512,7 @@ async function hapusToko(id) {
     );
     if (!yakin) return;
   } else {
-    const yakin = await tampilkanKonfirmasi(`Hapus ${namaToko} dari daftar?`, {
+    const yakin = await tampilkanKonfirmasi(`Apakah akan menghapus ${namaToko} dari daftar?`, {
       judul: "Hapus Toko",
       teksYa: "Hapus",
       teksBatal: "Batal",

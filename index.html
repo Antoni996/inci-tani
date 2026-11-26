@@ -1054,7 +1054,7 @@
             <div class="form-field">
               <label id="label-ukuran-modal" for="ukuran-obat-angka">Ukuran</label>
               <div id="wadah-ukuran-obat" class="ukuran-satuan-grid">
-                <input type="number" id="ukuran-obat-angka" min="0" step="any" inputmode="decimal" placeholder="Contoh: 250" oninput="bersihkanInputAngkaUkuran(this)">
+                <input type="text" id="ukuran-obat-angka" inputmode="numeric" pattern="[0-9]*" placeholder="Contoh: 250" oninput="bersihkanInputAngkaUkuran(this)">
                 <select id="satuan-ukuran-obat" class="satuan-select" aria-label="Satuan ukuran obat">
                   <option value="ml">ml</option>
                   <option value="gram">gram</option>
@@ -1062,7 +1062,7 @@
                 </select>
               </div>
               <div id="wadah-ukuran-pupuk" class="ukuran-satuan-grid" style="display: none;">
-                <input type="number" id="ukuran-pupuk-angka" min="0" step="any" inputmode="decimal" placeholder="Contoh: 50" oninput="bersihkanInputAngkaUkuran(this)" disabled>
+                <input type="text" id="ukuran-pupuk-angka" inputmode="numeric" pattern="[0-9]*" placeholder="Contoh: 50" oninput="bersihkanInputAngkaUkuran(this)" disabled>
                 <span class="satuan-teks-statis" aria-label="Satuan ukuran pupuk">sack</span>
               </div>
             </div>
