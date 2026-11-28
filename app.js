@@ -773,22 +773,22 @@ function terapkanColgroupSejajar() {
   const lebarWadah = Math.max(280, (tableWrap && tableWrap.clientWidth) || window.innerWidth - 24);
   const jumlahToko = Math.max(1, daftarToko.length);
 
-  // Semua kolom dipaksa muat di dalam lebar layar/wadah tanpa scroll horizontal
-  let bobotNama = 2.1;
-  let bobotUkuran = 1.25;
-  let bobotHarga = isPupuk ? 1.4 : 0;
-  let bobotToko = jumlahToko >= 4 ? 1.05 : 1.25;
-  let bobotAksi = isMobile ? 0 : 1.0;
+  const bobotKolom = isPupuk
+    ? [2.3, 1.3, 1.5]
+    : [2.1, 1.25];
 
-  const bobotKolom = [bobotNama, bobotUkuran];
-  if (isPupuk) bobotKolom.push(bobotHarga);
-  daftarToko.forEach(() => bobotKolom.push(bobotToko));
-  if (!isMobile) bobotKolom.push(bobotAksi);
+  if (!isPupuk) {
+    const bobotToko = jumlahToko >= 4 ? 1.05 : 1.25;
+    daftarToko.forEach(() => bobotKolom.push(bobotToko));
+  }
+
+  if (!isMobile) {
+    bobotKolom.push(1.0);
+  }
 
   const totalBobot = bobotKolom.reduce((acc, n) => acc + n, 0) || 1;
   const lebarPx = bobotKolom.map(b => Math.max(36, Math.round((b / totalBobot) * lebarWadah)));
 
-  // Sesuaikan kolom pertama agar jumlah lebar persis sama dengan lebarWadah
   const selisih = lebarWadah - lebarPx.reduce((acc, n) => acc + n, 0);
   lebarPx[0] = Math.max(44, lebarPx[0] + selisih);
 
@@ -1178,10 +1178,11 @@ function renderHeaderTabel() {
   `;
   if (isPupuk) {
     thHtml += `<th class="col-harga">Harga Jual <span class="header-ket-biasa">(Rp)</span></th>`;
+  } else {
+    daftarToko.forEach(t => {
+      thHtml += `<th class="col-toko">${escapeHtml(t.nama)} <span class="header-ket-biasa">(Rp)</span></th>`;
+    });
   }
-  daftarToko.forEach(t => {
-    thHtml += `<th class="col-toko">${escapeHtml(t.nama)} <span class="header-ket-biasa">(Rp)</span></th>`;
-  });
   if (!isMobile) {
     thHtml += `<th class="col-aksi">Aksi</th>`;
   }
@@ -1201,7 +1202,9 @@ function renderIsiTabel() {
   const hurufPilihan = (document.getElementById("filter-huruf").value || "").toLowerCase();
   const isMobile = window.innerWidth <= 640;
   const isPupuk = kategoriAktif === "Pupuk";
-  const totalKolom = (isPupuk ? 2 : 1) + daftarToko.length + (isMobile ? 1 : 2);
+  const totalKolom = isPupuk
+    ? (isMobile ? 3 : 4)
+    : (2 + daftarToko.length + (isMobile ? 0 : 1));
 
   let hasil = semuaBarangCache.filter(item => {
     const namaItem = (item.nama || "").trim();
@@ -1256,9 +1259,11 @@ function renderIsiTabel() {
     const hargaToko = item.hargaToko || {};
     const ukuranTampil = susunUkuranGabungan(item.ukuran, item.kategori, item.satuanUkuran);
     let tdTokoHtml = "";
-    daftarToko.forEach(t => {
-      tdTokoHtml += `<td class="col-toko">${formatAngkaToko(hargaToko[t.id] ?? hargaToko[String(t.id)])}</td>`;
-    });
+    if (!isPupuk) {
+      daftarToko.forEach(t => {
+        tdTokoHtml += `<td class="col-toko">${formatAngkaToko(hargaToko[t.id] ?? hargaToko[String(t.id)])}</td>`;
+      });
+    }
 
     const tdHargaJualHtml = isPupuk
       ? `<td class="col-harga"><strong>${formatAngkaToko(item.hargaJual)}</strong></td>`
