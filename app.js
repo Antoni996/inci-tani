@@ -26,6 +26,40 @@ let resolverModalPesan = null;
 let timerCountdownAlert = null;
 let timerSinkronOtomatis = null;
 
+function fokusKeAtasHalaman() {
+  window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
+}
+
+function fokusKeAtasModal(modalId) {
+  const modal = document.getElementById(modalId);
+  if (!modal) return;
+  const bodyModal = modal.querySelector(".modal-body");
+  if (bodyModal) {
+    bodyModal.scrollTop = 0;
+  }
+}
+
+function bukaModalLogo() {
+  fokusKeAtasHalaman();
+  lepasFokusAktif();
+  document.getElementById("modal-logo").classList.add("aktif");
+}
+
+function tutupModalLogo() {
+  lepasFokusAktif();
+  document.getElementById("modal-logo").classList.remove("aktif");
+}
+
+function perbaruiTinggiStickyHeader() {
+  const tabBar = document.getElementById("tab-kategori");
+  const tabel = document.getElementById("tabel-utama");
+  if (!tabBar || !tabel) return;
+  const tinggi = Math.max(44, Math.round(tabBar.getBoundingClientRect().height));
+  tabel.style.setProperty("--sticky-tab-height", `${tinggi}px`);
+}
+
 function setIkonModalPesan(bahaya = false) {
   const badge = document.getElementById("pesan-modal-ikon");
   if (!badge) return;
@@ -276,6 +310,7 @@ async function refreshTokenJikaPerlu() {
 function tampilkanHalamanAplikasi() {
   document.getElementById("halaman-login").style.display = "none";
   document.getElementById("halaman-utama").style.display = "block";
+  requestAnimationFrame(perbaruiTinggiStickyHeader);
 }
 
 function tampilkanHalamanLogin(pesanError = "") {
@@ -756,6 +791,7 @@ function buatTabKategori() {
     bukaModalBarang();
   });
   tabContainer.appendChild(btnTambah);
+  requestAnimationFrame(perbaruiTinggiStickyHeader);
 }
 
 function gantiTabKategori(nilaiKategori) {
@@ -765,6 +801,7 @@ function gantiTabKategori(nilaiKategori) {
   buatTabKategori();
   renderHeaderTabel();
   renderIsiTabel();
+  fokusKeAtasHalaman();
 }
 
 function formatInputRibuan(input) {
@@ -849,6 +886,7 @@ function renderFormToko(nilaiHarga = {}) {
 }
 
 function bukaModalBarang() {
+  fokusKeAtasHalaman();
   idSedangDiedit = null;
   document.getElementById("judul-form-barang").textContent = "Tambah";
   document.getElementById("btn-simpan-barang").textContent = "Simpan";
@@ -857,6 +895,7 @@ function bukaModalBarang() {
   sinkronkanFormKategori();
   lepasFokusAktif();
   document.getElementById("modal-barang").classList.add("aktif");
+  fokusKeAtasModal("modal-barang");
 }
 
 function tutupModalBarang() {
@@ -1058,6 +1097,7 @@ function mulaiEdit(id) {
   const item = semuaBarangCache.find(b => String(b.id) === String(id));
   if (!item) return;
 
+  fokusKeAtasHalaman();
   idSedangDiedit = item.id;
   const katItem = item.kategori === "Pupuk" ? "Pupuk" : "Obat";
   const isPupuk = katItem === "Pupuk";
@@ -1084,6 +1124,7 @@ function mulaiEdit(id) {
   sinkronkanFormKategori();
   lepasFokusAktif();
   document.getElementById("modal-barang").classList.add("aktif");
+  fokusKeAtasModal("modal-barang");
 }
 
 function renderHeaderTabel() {
@@ -1103,6 +1144,14 @@ function renderHeaderTabel() {
   });
   thHtml += `<th class="col-aksi"><span class="teks-rata-kanan-kiri">Aksi</span></th>`;
   header.innerHTML = thHtml;
+  requestAnimationFrame(perbaruiTinggiStickyHeader);
+}
+
+function ambilHurufKelompok(namaItem) {
+  const bersih = String(namaItem || "").trim();
+  if (!bersih) return "#";
+  const hurufPertama = bersih.charAt(0).toUpperCase();
+  return /^[A-Z]$/.test(hurufPertama) ? hurufPertama : "#";
 }
 
 function renderIsiTabel() {
@@ -1146,7 +1195,20 @@ function renderIsiTabel() {
     return;
   }
 
+  const tampilkanPemisahHuruf = !hurufPilihan;
+  let hurufTerakhir = null;
+
   hasil.forEach(item => {
+    const hurufSekarang = ambilHurufKelompok(item.nama);
+    if (tampilkanPemisahHuruf && hurufSekarang !== hurufTerakhir) {
+      hurufTerakhir = hurufSekarang;
+      tbody.innerHTML += `
+        <tr class="pemisah-huruf">
+          <td colspan="${totalKolom}">${escapeHtml(hurufSekarang)}</td>
+        </tr>
+      `;
+    }
+
     const hargaToko = item.hargaToko || {};
     const ukuranTampil = susunUkuranGabungan(item.ukuran, item.kategori, item.satuanUkuran);
     let tdTokoHtml = "";
@@ -1288,12 +1350,16 @@ async function bukaDetail(id) {
       tutupDetail();
     }
   };
+
+  fokusKeAtasHalaman();
 }
 
 function tutupDetail() {
   idDetailAktif = null;
   document.getElementById("halaman-detail").style.display = "none";
   document.getElementById("halaman-utama").style.display = "block";
+  requestAnimationFrame(perbaruiTinggiStickyHeader);
+  fokusKeAtasHalaman();
 }
 
 function editDariDetail() {
@@ -1376,11 +1442,13 @@ function buatPesanKonfirmasiTokoBaru(namaBaruList) {
 }
 
 function bukaModalToko() {
+  fokusKeAtasHalaman();
   draftToko = daftarToko.map(t => ({ ...t, isBaru: false }));
   document.getElementById("nama-toko-baru").value = "";
   renderListEditToko();
   lepasFokusAktif();
   document.getElementById("modal-toko").classList.add("aktif");
+  fokusKeAtasModal("modal-toko");
 }
 
 function tutupModalTokoLangsung() {
@@ -1604,6 +1672,10 @@ async function inisialisasiAplikasi() {
   await muatDataDariCloud(false, "Tersinkron");
   mulaiSinkronOtomatisLimaMenit();
 }
+
+window.addEventListener("resize", () => {
+  perbaruiTinggiStickyHeader();
+});
 
 window.addEventListener("online", () => {
   perbaruiStatusSync("Online");

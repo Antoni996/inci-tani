@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Inci Tani - Catatan Harga Obat dan Pupuk</title>
+  <link rel="icon" type="image/png" href="logo.png">
+  <link rel="apple-touch-icon" href="logo.png">
   <link rel="manifest" href="manifest.json">
   <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
   <style>
@@ -31,7 +33,32 @@
       box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
     }
     .header-blok {
+      display: flex;
+      align-items: center;
+      gap: 12px;
       margin: 0;
+      min-width: 0;
+    }
+    .btn-logo-brand {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 48px;
+      height: 48px;
+      padding: 0;
+      border-radius: 12px;
+      background: #f0fdf4;
+      border: 1.5px solid #bbf7d0;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .btn-logo-brand img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .header-teks-blok {
       min-width: 0;
     }
     .judul-row {
@@ -77,8 +104,22 @@
       padding: 20px;
       box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
     }
+    .login-brand-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .login-logo-img {
+      width: 46px;
+      height: 46px;
+      border-radius: 11px;
+      object-fit: cover;
+      border: 1.5px solid #bbf7d0;
+      flex-shrink: 0;
+    }
     .login-judul {
-      margin: 0 0 6px;
+      margin: 0;
       font-size: 22px;
       font-weight: 700;
       color: #0f172a;
@@ -299,7 +340,7 @@
     .tab-bar {
       position: sticky;
       top: 0;
-      z-index: 20;
+      z-index: 25;
       display: flex;
       flex-wrap: nowrap;
       align-items: flex-end;
@@ -372,33 +413,41 @@
 
     .table-wrap {
       overflow-x: auto;
+      overflow-y: visible;
       background: #fff;
       border-radius: 0 0 8px 8px;
       -webkit-overflow-scrolling: touch;
     }
     table {
       width: 100%;
-      border-collapse: collapse;
+      border-collapse: separate;
+      border-spacing: 0;
       background: #fff;
     }
     th, td {
-      border: 1px solid #cbd5e1;
+      border-right: 1px solid #cbd5e1;
+      border-bottom: 1px solid #cbd5e1;
       padding: 10px 11px;
       text-align: left;
       font-size: 15px;
+    }
+    th:first-child, td:first-child {
+      border-left: 1px solid #cbd5e1;
     }
     td {
       white-space: nowrap;
     }
     th {
-      z-index: 10;
-      border-top: none;
+      position: sticky;
+      top: var(--sticky-tab-height, 50px);
+      z-index: 20;
       font-weight: 700;
       white-space: normal;
       overflow-wrap: anywhere;
       word-break: break-word;
       line-height: 1.25;
       vertical-align: middle;
+      box-shadow: 0 2px 4px rgba(15, 23, 42, 0.06);
     }
     .header-ket-biasa {
       font-weight: 400;
@@ -408,33 +457,45 @@
       background: #dbeafe;
       color: #1e3a8a;
       border-color: #93c5fd;
-      border-top: none;
     }
     #tabel-utama.mode-kat-pupuk th {
       background: #e2e8f0;
       color: #1e293b;
       border-color: #94a3b8;
-      border-top: none;
     }
 
-    #tabel-utama.mode-kat-obat #tabel-barang tr:nth-child(odd) td {
+    tr.pemisah-huruf td {
+      background: #f1f5f9 !important;
+      color: #0f172a !important;
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: 0.05em;
+      padding: 6px 12px;
+      border-top: 1px solid #cbd5e1;
+      border-bottom: 1.5px solid #94a3b8;
+    }
+    #tabel-utama.mode-kat-obat tr.pemisah-huruf td {
+      background: #eff6ff !important;
+      color: #1e3a8a !important;
+      border-bottom-color: #93c5fd;
+    }
+
+    #tabel-utama.mode-kat-obat #tabel-barang tr.baris-klik:nth-child(odd) td {
       background: #ffffff;
       color: #0f172a;
     }
-    #tabel-utama.mode-kat-obat #tabel-barang tr:nth-child(even) td {
-      background: #f1f5f9;
+    #tabel-utama.mode-kat-obat #tabel-barang tr.baris-klik:nth-child(even) td {
+      background: #f8fafc;
       color: #1d4ed8;
     }
 
-    #tabel-utama.mode-kat-pupuk #tabel-barang tr:nth-child(odd) td {
+    #tabel-utama.mode-kat-pupuk #tabel-barang tr.baris-klik:nth-child(odd) td {
       background: #ffffff;
       color: #0f172a;
-      border-color: #cbd5e1;
     }
-    #tabel-utama.mode-kat-pupuk #tabel-barang tr:nth-child(even) td {
+    #tabel-utama.mode-kat-pupuk #tabel-barang tr.baris-klik:nth-child(even) td {
       background: #e2e8f0;
       color: #334155;
-      border-color: #cbd5e1;
     }
 
     .teks-rata-kanan-kiri {
@@ -443,15 +504,13 @@
       text-align: inherit;
     }
     tr.baris-klik { cursor: pointer; }
-    #tabel-utama.mode-kat-obat tr.baris-klik:nth-child(odd):hover td,
-    #tabel-utama.mode-kat-obat tr.baris-klik:nth-child(even):hover td {
-      background: #eff6ff;
-      color: inherit;
+    #tabel-utama.mode-kat-obat tr.baris-klik:hover td {
+      background: #dbeafe !important;
+      color: #0f172a !important;
     }
-    #tabel-utama.mode-kat-pupuk tr.baris-klik:nth-child(odd):hover td,
-    #tabel-utama.mode-kat-pupuk tr.baris-klik:nth-child(even):hover td {
-      background: #cbd5e1;
-      color: #0f172a;
+    #tabel-utama.mode-kat-pupuk tr.baris-klik:hover td {
+      background: #cbd5e1 !important;
+      color: #0f172a !important;
     }
 
     .bottom-sticky-wrap {
@@ -511,6 +570,10 @@
         align-items: stretch;
         padding: 14px;
         gap: 12px;
+      }
+      .btn-logo-brand {
+        width: 44px;
+        height: 44px;
       }
       .judul-utama { font-size: 23px; }
       .subjudul-utama { font-size: 14.5px; }
@@ -664,6 +727,7 @@
       position: static;
       background: #cbd5e1;
       color: #1e293b;
+      box-shadow: none;
     }
 
     .modal-backdrop {
@@ -692,6 +756,34 @@
       max-height: 88vh;
       overflow: hidden;
       box-shadow: 0 20px 42px rgba(15, 23, 42, 0.22);
+    }
+
+    .logo-preview-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding: 20px;
+    }
+    .logo-preview-img {
+      width: 180px;
+      height: 180px;
+      border-radius: 24px;
+      object-fit: cover;
+      border: 2px solid #bbf7d0;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+    }
+    .logo-preview-nama {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .logo-preview-ket {
+      margin: 0;
+      font-size: 14px;
+      color: #64748b;
+      text-align: center;
     }
 
     /* Popup Alert & Konfirmasi Estetik dan Responsif (HP & Tablet) */
@@ -903,7 +995,10 @@
 
   <!-- HALAMAN LOGIN -->
   <div id="halaman-login" class="login-wrap">
-    <h1 class="login-judul">Inci Tani</h1>
+    <div class="login-brand-row">
+      <img src="logo.png" alt="Logo Inci Tani" class="login-logo-img">
+      <h1 class="login-judul">Inci Tani</h1>
+    </div>
     <p class="login-sub">Masuk dengan akun toko untuk melihat dan mengubah data harga obat &amp; pupuk.</p>
     <form id="form-login" class="form-stack" onsubmit="prosesLogin(event)">
       <div class="form-field">
@@ -923,11 +1018,16 @@
   <div id="halaman-utama" style="display: none;">
     <header class="topbar-utama">
       <div class="header-blok">
-        <div class="judul-row">
-          <h1 class="judul-utama">Inci Tani</h1>
-          <span class="badge-kategori-header">Obat &amp; Pupuk</span>
+        <button type="button" class="btn-logo-brand" onclick="bukaModalLogo()" title="Lihat Logo Inci Tani" aria-label="Lihat Logo Inci Tani">
+          <img src="logo.png" alt="Logo Inci Tani">
+        </button>
+        <div class="header-teks-blok">
+          <div class="judul-row">
+            <h1 class="judul-utama">Inci Tani</h1>
+            <span class="badge-kategori-header">Obat &amp; Pupuk</span>
+          </div>
+          <p class="subjudul-utama">Catatan Harga Obat dan Pupuk</p>
         </div>
-        <p class="subjudul-utama">Catatan Harga Obat dan Pupuk</p>
       </div>
 
       <!-- Toolbar Utama (Selalu di Kanan) -->
@@ -1050,6 +1150,21 @@
       </div>
 
       <div class="log-waktu-box" id="detail-log-waktu"></div>
+    </div>
+  </div>
+
+  <!-- MODAL PREVIEW LOGO -->
+  <div id="modal-logo" class="modal-backdrop" onclick="tutupModalLogo()">
+    <div class="modal-box" style="max-width: 360px;" onclick="event.stopPropagation()">
+      <h3 class="modal-header-divider">Logo Website</h3>
+      <div class="logo-preview-wrap">
+        <img src="logo.png" alt="Logo Inci Tani" class="logo-preview-img">
+        <p class="logo-preview-nama">Inci Tani</p>
+        <p class="logo-preview-ket">Catatan Harga Obat dan Pupuk</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-sekunder" onclick="tutupModalLogo()">Tutup</button>
+      </div>
     </div>
   </div>
 
