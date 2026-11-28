@@ -770,33 +770,34 @@ function terapkanColgroupSejajar() {
 
   const isMobile = window.innerWidth <= 640;
   const isPupuk = kategoriAktif === "Pupuk";
-  const lebarWadah = tableWrap ? tableWrap.clientWidth : 600;
+  const lebarWadah = Math.max(280, (tableWrap && tableWrap.clientWidth) || window.innerWidth - 24);
+  const jumlahToko = Math.max(1, daftarToko.length);
 
-  const lebarNama = isMobile ? 115 : 170;
-  const lebarUkuran = isMobile ? 84 : 105;
-  const lebarHarga = isPupuk ? (isMobile ? 96 : 115) : 0;
-  const lebarToko = isMobile ? 92 : 108;
-  const lebarAksi = isMobile ? 0 : 84;
+  // Semua kolom dipaksa muat di dalam lebar layar/wadah tanpa scroll horizontal
+  let bobotNama = 2.1;
+  let bobotUkuran = 1.25;
+  let bobotHarga = isPupuk ? 1.4 : 0;
+  let bobotToko = jumlahToko >= 4 ? 1.05 : 1.25;
+  let bobotAksi = isMobile ? 0 : 1.0;
 
-  const daftarLebar = [lebarNama, lebarUkuran];
-  if (isPupuk) daftarLebar.push(lebarHarga);
-  daftarToko.forEach(() => daftarLebar.push(lebarToko));
-  if (!isMobile) daftarLebar.push(lebarAksi);
+  const bobotKolom = [bobotNama, bobotUkuran];
+  if (isPupuk) bobotKolom.push(bobotHarga);
+  daftarToko.forEach(() => bobotKolom.push(bobotToko));
+  if (!isMobile) bobotKolom.push(bobotAksi);
 
-  const totalLebar = daftarLebar.reduce((acc, n) => acc + n, 0);
-  const lebarTabelPx = Math.max(totalLebar, lebarWadah);
+  const totalBobot = bobotKolom.reduce((acc, n) => acc + n, 0) || 1;
+  const lebarPx = bobotKolom.map(b => Math.max(36, Math.round((b / totalBobot) * lebarWadah)));
 
-  const selisih = lebarTabelPx - totalLebar;
-  if (selisih > 0) {
-    daftarLebar[0] += selisih;
-  }
+  // Sesuaikan kolom pertama agar jumlah lebar persis sama dengan lebarWadah
+  const selisih = lebarWadah - lebarPx.reduce((acc, n) => acc + n, 0);
+  lebarPx[0] = Math.max(44, lebarPx[0] + selisih);
 
-  const colsHtml = daftarLebar.map(px => `<col style="width: ${px}px;">`).join("");
+  const colsHtml = lebarPx.map(px => `<col style="width: ${px}px;">`).join("");
   colHeader.innerHTML = colsHtml;
   colBody.innerHTML = colsHtml;
 
-  tabelHeader.style.width = `${lebarTabelPx}px`;
-  tabelUtama.style.width = `${lebarTabelPx}px`;
+  tabelHeader.style.width = `${lebarWadah}px`;
+  tabelUtama.style.width = `${lebarWadah}px`;
 }
 
 function buatTabKategori() {
@@ -1433,7 +1434,6 @@ async function hapusBarang(id) {
   if (!yakin) return false;
 
   const snapshotCache = [...semuaBarangCache];
-  // Hapus langsung dari state & perbarui tabel seketika
   semuaBarangCache = semuaBarangCache.filter(b => String(b.id) !== String(id));
   renderIsiTabel();
   perbaruiStatusSync("Menghapus...");
