@@ -52,12 +52,52 @@ function tutupModalLogo() {
   document.getElementById("modal-logo").classList.remove("aktif");
 }
 
-function perbaruiTinggiStickyHeader() {
-  const tabBar = document.getElementById("tab-kategori");
-  const tabel = document.getElementById("tabel-utama");
-  if (!tabBar || !tabel) return;
-  const tinggi = Math.max(44, Math.round(tabBar.getBoundingClientRect().height));
-  tabel.style.setProperty("--sticky-tab-height", `${tinggi}px`);
+function sinkronkanLebarKolomSticky() {
+  const headerCells = Array.from(document.querySelectorAll("#header-kolom-row .header-kolom-cell"));
+  if (!headerCells.length) return;
+
+  const sampleRow = document.querySelector("#tabel-barang tr.baris-klik");
+  const tableWrap = document.getElementById("table-wrap");
+  const headerScroll = document.getElementById("header-kolom-scroll");
+
+  if (!sampleRow) {
+    const lebarWrap = tableWrap ? tableWrap.clientWidth : 0;
+    const jumlah = headerCells.length;
+    if (lebarWrap > 0 && jumlah > 0) {
+      headerCells.forEach((cell, idx) => {
+        if (idx === 0) {
+          cell.style.flex = "1 1 140px";
+          cell.style.width = "";
+          cell.style.minWidth = "120px";
+        } else {
+          const lebar = Math.max(80, Math.round(lebarWrap / jumlah));
+          cell.style.flex = "0 0 auto";
+          cell.style.width = `${lebar}px`;
+          cell.style.minWidth = `${lebar}px`;
+        }
+      });
+    }
+    return;
+  }
+
+  const visibleBodyCells = Array.from(sampleRow.children).filter(td => getComputedStyle(td).display !== "none");
+  if (visibleBodyCells.length !== headerCells.length) return;
+
+  visibleBodyCells.forEach((td, idx) => {
+    const rect = td.getBoundingClientRect();
+    const hCell = headerCells[idx];
+    if (rect.width > 0 && hCell) {
+      const lebarBulat = Math.round(rect.width);
+      hCell.style.flex = "0 0 auto";
+      hCell.style.width = `${lebarBulat}px`;
+      hCell.style.minWidth = `${lebarBulat}px`;
+      hCell.style.maxWidth = `${lebarBulat}px`;
+    }
+  });
+
+  if (tableWrap && headerScroll) {
+    headerScroll.scrollLeft = tableWrap.scrollLeft;
+  }
 }
 
 function setIkonModalPesan(bahaya = false) {
@@ -310,7 +350,7 @@ async function refreshTokenJikaPerlu() {
 function tampilkanHalamanAplikasi() {
   document.getElementById("halaman-login").style.display = "none";
   document.getElementById("halaman-utama").style.display = "block";
-  requestAnimationFrame(perbaruiTinggiStickyHeader);
+  requestAnimationFrame(sinkronkanLebarKolomSticky);
 }
 
 function tampilkanHalamanLogin(pesanError = "") {
@@ -752,11 +792,16 @@ function formatWaktu(isoString) {
 function perbaruiModeTabelKategori() {
   const tabel = document.getElementById("tabel-utama");
   const kartu = document.getElementById("kartu-tabel-utama");
+  const stickyHeader = document.getElementById("sticky-header-tabel");
   const isPupuk = kategoriAktif === "Pupuk";
 
   if (tabel) {
     tabel.classList.remove("mode-kat-obat", "mode-kat-pupuk");
     tabel.classList.add(isPupuk ? "mode-kat-pupuk" : "mode-kat-obat");
+  }
+  if (stickyHeader) {
+    stickyHeader.classList.remove("mode-kat-obat", "mode-kat-pupuk");
+    stickyHeader.classList.add(isPupuk ? "mode-kat-pupuk" : "mode-kat-obat");
   }
   if (kartu) {
     kartu.classList.toggle("tampil-pupuk", isPupuk);
@@ -791,7 +836,6 @@ function buatTabKategori() {
     bukaModalBarang();
   });
   tabContainer.appendChild(btnTambah);
-  requestAnimationFrame(perbaruiTinggiStickyHeader);
 }
 
 function gantiTabKategori(nilaiKategori) {
@@ -801,6 +845,7 @@ function gantiTabKategori(nilaiKategori) {
   buatTabKategori();
   renderHeaderTabel();
   renderIsiTabel();
+  requestAnimationFrame(sinkronkanLebarKolomSticky);
   fokusKeAtasHalaman();
 }
 
@@ -1128,23 +1173,24 @@ function mulaiEdit(id) {
 }
 
 function renderHeaderTabel() {
-  const header = document.getElementById("header-tabel");
+  const headerRow = document.getElementById("header-kolom-row");
+  if (!headerRow) return;
+
   const labelNama = ambilLabelNamaKategori(kategoriAktif);
   const isPupuk = kategoriAktif === "Pupuk";
 
-  let thHtml = `
-    <th class="col-nama">${escapeHtml(labelNama)}</th>
-    <th class="col-ukuran"><span class="teks-rata-kanan-kiri">Ukuran</span></th>
+  let html = `
+    <div class="header-kolom-cell col-nama">${escapeHtml(labelNama)}</div>
+    <div class="header-kolom-cell col-ukuran" style="justify-content: center;">Ukuran</div>
   `;
   if (isPupuk) {
-    thHtml += `<th class="col-harga"><span class="teks-rata-kanan-kiri">Harga Jual <span class="header-ket-biasa">(Rp)</span></span></th>`;
+    html += `<div class="header-kolom-cell col-harga" style="justify-content: flex-end;">Harga Jual <span class="header-ket-biasa">(Rp)</span></div>`;
   }
   daftarToko.forEach(t => {
-    thHtml += `<th class="col-toko"><span class="teks-rata-kanan-kiri">${escapeHtml(t.nama)} <span class="header-ket-biasa">(Rp)</span></span></th>`;
+    html += `<div class="header-kolom-cell col-toko" style="justify-content: flex-end;">${escapeHtml(t.nama)} <span class="header-ket-biasa">(Rp)</span></div>`;
   });
-  thHtml += `<th class="col-aksi"><span class="teks-rata-kanan-kiri">Aksi</span></th>`;
-  header.innerHTML = thHtml;
-  requestAnimationFrame(perbaruiTinggiStickyHeader);
+  html += `<div class="header-kolom-cell col-aksi" style="justify-content: center;">Aksi</div>`;
+  headerRow.innerHTML = html;
 }
 
 function ambilHurufKelompok(namaItem) {
@@ -1192,6 +1238,7 @@ function renderIsiTabel() {
         </td>
       </tr>
     `;
+    requestAnimationFrame(sinkronkanLebarKolomSticky);
     return;
   }
 
@@ -1232,6 +1279,8 @@ function renderIsiTabel() {
       </tr>
     `;
   });
+
+  requestAnimationFrame(sinkronkanLebarKolomSticky);
 }
 
 async function tampilkanBarang() {
@@ -1358,7 +1407,7 @@ function tutupDetail() {
   idDetailAktif = null;
   document.getElementById("halaman-detail").style.display = "none";
   document.getElementById("halaman-utama").style.display = "block";
-  requestAnimationFrame(perbaruiTinggiStickyHeader);
+  requestAnimationFrame(sinkronkanLebarKolomSticky);
   fokusKeAtasHalaman();
 }
 
@@ -1656,6 +1705,14 @@ async function simpanPerubahanToko() {
   }
 }
 
+document.getElementById("table-wrap").addEventListener("scroll", () => {
+  const tableWrap = document.getElementById("table-wrap");
+  const headerScroll = document.getElementById("header-kolom-scroll");
+  if (tableWrap && headerScroll) {
+    headerScroll.scrollLeft = tableWrap.scrollLeft;
+  }
+});
+
 async function inisialisasiAplikasi() {
   if (!cloudSudahDiatur()) {
     tampilkanHalamanLogin("Konfigurasi Supabase (CLOUD_DEFAULT) belum diisi di app.js.");
@@ -1674,7 +1731,7 @@ async function inisialisasiAplikasi() {
 }
 
 window.addEventListener("resize", () => {
-  perbaruiTinggiStickyHeader();
+  sinkronkanLebarKolomSticky();
 });
 
 window.addEventListener("online", () => {

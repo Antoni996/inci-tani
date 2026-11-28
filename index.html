@@ -337,10 +337,18 @@
       border-radius: 8px;
       margin-bottom: 18px;
     }
-    .tab-bar {
+
+    /* Satu blok sticky gabungan: Tab Kategori (Obat, Pupuk, + Tambah) + Header Kolom */
+    .sticky-header-tabel {
       position: sticky;
       top: 0;
       z-index: 25;
+      background: #ffffff;
+      border-radius: 8px 8px 0 0;
+      box-shadow: 0 3px 8px rgba(15, 23, 42, 0.08);
+    }
+
+    .tab-bar {
       display: flex;
       flex-wrap: nowrap;
       align-items: flex-end;
@@ -411,57 +419,65 @@
       white-space: nowrap;
     }
 
+    .header-kolom-scroll {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .header-kolom-row {
+      display: flex;
+      align-items: stretch;
+      min-width: 100%;
+    }
+    .header-kolom-cell {
+      flex: 0 0 auto;
+      padding: 10px 11px;
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.25;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      border-right: 1px solid #cbd5e1;
+      border-bottom: 1px solid #cbd5e1;
+      display: flex;
+      align-items: center;
+    }
+    .header-kolom-cell:first-child {
+      border-left: 1px solid #cbd5e1;
+    }
+    .sticky-header-tabel.mode-kat-obat .header-kolom-cell {
+      background: #dbeafe;
+      color: #1e3a8a;
+      border-color: #93c5fd;
+    }
+    .sticky-header-tabel.mode-kat-pupuk .header-kolom-cell {
+      background: #e2e8f0;
+      color: #1e293b;
+      border-color: #94a3b8;
+    }
+
     .table-wrap {
       overflow-x: auto;
-      overflow-y: visible;
       background: #fff;
       border-radius: 0 0 8px 8px;
       -webkit-overflow-scrolling: touch;
     }
     table {
       width: 100%;
-      border-collapse: separate;
-      border-spacing: 0;
+      border-collapse: collapse;
       background: #fff;
     }
     th, td {
-      border-right: 1px solid #cbd5e1;
-      border-bottom: 1px solid #cbd5e1;
+      border: 1px solid #cbd5e1;
       padding: 10px 11px;
       text-align: left;
       font-size: 15px;
     }
-    th:first-child, td:first-child {
-      border-left: 1px solid #cbd5e1;
-    }
     td {
       white-space: nowrap;
     }
-    th {
-      position: sticky;
-      top: var(--sticky-tab-height, 50px);
-      z-index: 20;
-      font-weight: 700;
-      white-space: normal;
-      overflow-wrap: anywhere;
-      word-break: break-word;
-      line-height: 1.25;
-      vertical-align: middle;
-      box-shadow: 0 2px 4px rgba(15, 23, 42, 0.06);
-    }
     .header-ket-biasa {
       font-weight: 400;
-    }
-
-    #tabel-utama.mode-kat-obat th {
-      background: #dbeafe;
-      color: #1e3a8a;
-      border-color: #93c5fd;
-    }
-    #tabel-utama.mode-kat-pupuk th {
-      background: #e2e8f0;
-      color: #1e293b;
-      border-color: #94a3b8;
     }
 
     tr.pemisah-huruf td {
@@ -498,11 +514,6 @@
       color: #334155;
     }
 
-    .teks-rata-kanan-kiri {
-      display: block;
-      width: 100%;
-      text-align: inherit;
-    }
     tr.baris-klik { cursor: pointer; }
     #tabel-utama.mode-kat-obat tr.baris-klik:hover td {
       background: #dbeafe !important;
@@ -591,18 +602,16 @@
         padding: 9px 16px;
         font-size: 16px;
       }
+      .header-kolom-cell {
+        padding: 9px 7px;
+        font-size: 14px;
+      }
       th, td {
         padding: 9px 7px;
         font-size: 15px;
       }
       td {
         white-space: normal;
-      }
-      th {
-        white-space: normal;
-        overflow-wrap: anywhere;
-        word-break: break-word;
-        line-height: 1.25;
       }
       .col-nama { min-width: 0; text-align: left; }
       .col-ukuran { width: 86px; max-width: 106px; text-align: center; }
@@ -724,10 +733,8 @@
       color: #475569;
     }
     .tabel-log-waktu th {
-      position: static;
       background: #cbd5e1;
       color: #1e293b;
-      box-shadow: none;
     }
 
     .modal-backdrop {
@@ -1063,14 +1070,17 @@
       </button>
     </div>
 
-    <!-- Kartu Tabel dengan Tab Kategori Menempel & Sticky -->
+    <!-- Kartu Tabel dengan Header Sticky (Tab Kategori + Header Kolom) -->
     <div id="kartu-tabel-utama" class="tabel-card">
-      <div id="tab-kategori" class="tab-bar" role="tablist" aria-label="Kategori Barang"></div>
-      <div class="table-wrap">
+      <div id="sticky-header-tabel" class="sticky-header-tabel mode-kat-obat">
+        <div id="tab-kategori" class="tab-bar" role="tablist" aria-label="Kategori Barang"></div>
+        <div id="header-kolom-scroll" class="header-kolom-scroll">
+          <div id="header-kolom-row" class="header-kolom-row"></div>
+        </div>
+      </div>
+
+      <div id="table-wrap" class="table-wrap">
         <table id="tabel-utama" class="mode-kat-obat">
-          <thead>
-            <tr id="header-tabel"></tr>
-          </thead>
           <tbody id="tabel-barang"></tbody>
         </table>
       </div>
