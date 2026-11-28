@@ -420,40 +420,7 @@
     }
 
     .header-kolom-scroll {
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-    }
-    .header-kolom-row {
-      display: flex;
-      align-items: stretch;
-      min-width: 100%;
-    }
-    .header-kolom-cell {
-      flex: 0 0 auto;
-      padding: 10px 11px;
-      font-size: 15px;
-      font-weight: 700;
-      line-height: 1.25;
-      white-space: normal;
-      overflow-wrap: anywhere;
-      word-break: break-word;
-      border-right: 1px solid #cbd5e1;
-      border-bottom: 1px solid #cbd5e1;
-      display: flex;
-      align-items: center;
-    }
-    .header-kolom-cell:first-child {
-      border-left: 1px solid #cbd5e1;
-    }
-    .sticky-header-tabel.mode-kat-obat .header-kolom-cell {
-      background: #dbeafe;
-      color: #1e3a8a;
-      border-color: #93c5fd;
-    }
-    .sticky-header-tabel.mode-kat-pupuk .header-kolom-cell {
-      background: #e2e8f0;
-      color: #1e293b;
-      border-color: #94a3b8;
+      overflow-x: hidden;
     }
 
     .table-wrap {
@@ -462,22 +429,49 @@
       border-radius: 0 0 8px 8px;
       -webkit-overflow-scrolling: touch;
     }
-    table {
+
+    table.tabel-kolom {
       width: 100%;
+      table-layout: fixed;
       border-collapse: collapse;
       background: #fff;
     }
-    th, td {
+
+    #tabel-header th,
+    #tabel-utama td {
       border: 1px solid #cbd5e1;
-      padding: 10px 11px;
-      text-align: left;
+      padding: 10px 10px;
       font-size: 15px;
+      vertical-align: middle;
     }
-    td {
+
+    #tabel-header th {
+      font-weight: 700;
+      line-height: 1.25;
       white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
+
+    #tabel-utama td {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
     .header-ket-biasa {
       font-weight: 400;
+    }
+
+    #tabel-header.mode-kat-obat th {
+      background: #dbeafe;
+      color: #1e3a8a;
+      border-color: #93c5fd;
+    }
+    #tabel-header.mode-kat-pupuk th {
+      background: #e2e8f0;
+      color: #1e293b;
+      border-color: #94a3b8;
     }
 
     tr.pemisah-huruf td {
@@ -489,6 +483,7 @@
       padding: 6px 12px;
       border-top: 1px solid #cbd5e1;
       border-bottom: 1.5px solid #94a3b8;
+      text-align: left !important;
     }
     #tabel-utama.mode-kat-obat tr.pemisah-huruf td {
       background: #eff6ff !important;
@@ -523,6 +518,12 @@
       background: #cbd5e1 !important;
       color: #0f172a !important;
     }
+
+    .col-nama { text-align: left !important; }
+    .col-ukuran { text-align: center !important; }
+    .col-harga { text-align: right !important; }
+    .col-toko { text-align: right !important; }
+    .col-aksi { text-align: center !important; }
 
     .bottom-sticky-wrap {
       position: fixed;
@@ -564,16 +565,6 @@
       background: #f8fafc;
     }
 
-    .col-nama { min-width: 140px; text-align: left; }
-    .col-ukuran { width: 105px; max-width: 130px; text-align: center; }
-    .col-harga { width: 102px; max-width: 118px; text-align: right; }
-    .col-toko { width: 96px; max-width: 112px; text-align: right; }
-    .col-aksi { width: 86px; text-align: center; }
-
-    #tabel-utama.mode-kat-obat .col-harga {
-      display: none;
-    }
-
     @media (max-width: 640px) {
       body { padding: 14px 12px 96px; }
       .topbar-utama {
@@ -602,29 +593,14 @@
         padding: 9px 16px;
         font-size: 16px;
       }
-      .header-kolom-cell {
+      #tabel-header th,
+      #tabel-utama td {
         padding: 9px 7px;
         font-size: 14px;
       }
-      th, td {
-        padding: 9px 7px;
-        font-size: 15px;
+      .col-aksi {
+        display: none;
       }
-      td {
-        white-space: normal;
-      }
-      .col-nama { min-width: 0; text-align: left; }
-      .col-ukuran { width: 86px; max-width: 106px; text-align: center; }
-      .col-harga { width: 90px; max-width: 102px; text-align: right; }
-      .col-toko { width: 84px; max-width: 96px; text-align: right; }
-      .col-aksi { display: none; }
-
-      .mode-kat-obat .col-harga { display: none; }
-      .mode-kat-obat .col-toko { display: table-cell; }
-
-      .mode-kat-pupuk .col-harga { display: table-cell; }
-      .mode-kat-pupuk .col-toko { display: none; }
-
       .bottom-sticky-wrap {
         padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
       }
@@ -1070,17 +1046,23 @@
       </button>
     </div>
 
-    <!-- Kartu Tabel dengan Header Sticky (Tab Kategori + Header Kolom) -->
+    <!-- Kartu Tabel dengan Header Sticky (Tab Kategori + Header Kolom Sejajar 1 Tabel) -->
     <div id="kartu-tabel-utama" class="tabel-card">
       <div id="sticky-header-tabel" class="sticky-header-tabel mode-kat-obat">
         <div id="tab-kategori" class="tab-bar" role="tablist" aria-label="Kategori Barang"></div>
         <div id="header-kolom-scroll" class="header-kolom-scroll">
-          <div id="header-kolom-row" class="header-kolom-row"></div>
+          <table id="tabel-header" class="tabel-kolom mode-kat-obat">
+            <colgroup id="colgroup-header"></colgroup>
+            <thead>
+              <tr id="header-tabel"></tr>
+            </thead>
+          </table>
         </div>
       </div>
 
       <div id="table-wrap" class="table-wrap">
-        <table id="tabel-utama" class="mode-kat-obat">
+        <table id="tabel-utama" class="tabel-kolom mode-kat-obat">
+          <colgroup id="colgroup-body"></colgroup>
           <tbody id="tabel-barang"></tbody>
         </table>
       </div>

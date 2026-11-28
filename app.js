@@ -52,54 +52,6 @@ function tutupModalLogo() {
   document.getElementById("modal-logo").classList.remove("aktif");
 }
 
-function sinkronkanLebarKolomSticky() {
-  const headerCells = Array.from(document.querySelectorAll("#header-kolom-row .header-kolom-cell"));
-  if (!headerCells.length) return;
-
-  const sampleRow = document.querySelector("#tabel-barang tr.baris-klik");
-  const tableWrap = document.getElementById("table-wrap");
-  const headerScroll = document.getElementById("header-kolom-scroll");
-
-  if (!sampleRow) {
-    const lebarWrap = tableWrap ? tableWrap.clientWidth : 0;
-    const jumlah = headerCells.length;
-    if (lebarWrap > 0 && jumlah > 0) {
-      headerCells.forEach((cell, idx) => {
-        if (idx === 0) {
-          cell.style.flex = "1 1 140px";
-          cell.style.width = "";
-          cell.style.minWidth = "120px";
-        } else {
-          const lebar = Math.max(80, Math.round(lebarWrap / jumlah));
-          cell.style.flex = "0 0 auto";
-          cell.style.width = `${lebar}px`;
-          cell.style.minWidth = `${lebar}px`;
-        }
-      });
-    }
-    return;
-  }
-
-  const visibleBodyCells = Array.from(sampleRow.children).filter(td => getComputedStyle(td).display !== "none");
-  if (visibleBodyCells.length !== headerCells.length) return;
-
-  visibleBodyCells.forEach((td, idx) => {
-    const rect = td.getBoundingClientRect();
-    const hCell = headerCells[idx];
-    if (rect.width > 0 && hCell) {
-      const lebarBulat = Math.round(rect.width);
-      hCell.style.flex = "0 0 auto";
-      hCell.style.width = `${lebarBulat}px`;
-      hCell.style.minWidth = `${lebarBulat}px`;
-      hCell.style.maxWidth = `${lebarBulat}px`;
-    }
-  });
-
-  if (tableWrap && headerScroll) {
-    headerScroll.scrollLeft = tableWrap.scrollLeft;
-  }
-}
-
 function setIkonModalPesan(bahaya = false) {
   const badge = document.getElementById("pesan-modal-ikon");
   if (!badge) return;
@@ -350,7 +302,7 @@ async function refreshTokenJikaPerlu() {
 function tampilkanHalamanAplikasi() {
   document.getElementById("halaman-login").style.display = "none";
   document.getElementById("halaman-utama").style.display = "block";
-  requestAnimationFrame(sinkronkanLebarKolomSticky);
+  requestAnimationFrame(terapkanColgroupSejajar);
 }
 
 function tampilkanHalamanLogin(pesanError = "") {
@@ -790,22 +742,61 @@ function formatWaktu(isoString) {
 }
 
 function perbaruiModeTabelKategori() {
-  const tabel = document.getElementById("tabel-utama");
+  const tabelHeader = document.getElementById("tabel-header");
+  const tabelUtama = document.getElementById("tabel-utama");
   const kartu = document.getElementById("kartu-tabel-utama");
   const stickyHeader = document.getElementById("sticky-header-tabel");
   const isPupuk = kategoriAktif === "Pupuk";
+  const kelasMode = isPupuk ? "mode-kat-pupuk" : "mode-kat-obat";
 
-  if (tabel) {
-    tabel.classList.remove("mode-kat-obat", "mode-kat-pupuk");
-    tabel.classList.add(isPupuk ? "mode-kat-pupuk" : "mode-kat-obat");
-  }
-  if (stickyHeader) {
-    stickyHeader.classList.remove("mode-kat-obat", "mode-kat-pupuk");
-    stickyHeader.classList.add(isPupuk ? "mode-kat-pupuk" : "mode-kat-obat");
-  }
+  [tabelHeader, tabelUtama, stickyHeader].forEach(el => {
+    if (!el) return;
+    el.classList.remove("mode-kat-obat", "mode-kat-pupuk");
+    el.classList.add(kelasMode);
+  });
+
   if (kartu) {
     kartu.classList.toggle("tampil-pupuk", isPupuk);
   }
+}
+
+function terapkanColgroupSejajar() {
+  const colHeader = document.getElementById("colgroup-header");
+  const colBody = document.getElementById("colgroup-body");
+  const tabelHeader = document.getElementById("tabel-header");
+  const tabelUtama = document.getElementById("tabel-utama");
+  const tableWrap = document.getElementById("table-wrap");
+  if (!colHeader || !colBody || !tabelHeader || !tabelUtama) return;
+
+  const isMobile = window.innerWidth <= 640;
+  const isPupuk = kategoriAktif === "Pupuk";
+  const lebarWadah = tableWrap ? tableWrap.clientWidth : 600;
+
+  const lebarNama = isMobile ? 115 : 170;
+  const lebarUkuran = isMobile ? 84 : 105;
+  const lebarHarga = isPupuk ? (isMobile ? 96 : 115) : 0;
+  const lebarToko = isMobile ? 92 : 108;
+  const lebarAksi = isMobile ? 0 : 84;
+
+  const daftarLebar = [lebarNama, lebarUkuran];
+  if (isPupuk) daftarLebar.push(lebarHarga);
+  daftarToko.forEach(() => daftarLebar.push(lebarToko));
+  if (!isMobile) daftarLebar.push(lebarAksi);
+
+  const totalLebar = daftarLebar.reduce((acc, n) => acc + n, 0);
+  const lebarTabelPx = Math.max(totalLebar, lebarWadah);
+
+  const selisih = lebarTabelPx - totalLebar;
+  if (selisih > 0) {
+    daftarLebar[0] += selisih;
+  }
+
+  const colsHtml = daftarLebar.map(px => `<col style="width: ${px}px;">`).join("");
+  colHeader.innerHTML = colsHtml;
+  colBody.innerHTML = colsHtml;
+
+  tabelHeader.style.width = `${lebarTabelPx}px`;
+  tabelUtama.style.width = `${lebarTabelPx}px`;
 }
 
 function buatTabKategori() {
@@ -845,7 +836,7 @@ function gantiTabKategori(nilaiKategori) {
   buatTabKategori();
   renderHeaderTabel();
   renderIsiTabel();
-  requestAnimationFrame(sinkronkanLebarKolomSticky);
+  requestAnimationFrame(terapkanColgroupSejajar);
   fokusKeAtasHalaman();
 }
 
@@ -1173,24 +1164,28 @@ function mulaiEdit(id) {
 }
 
 function renderHeaderTabel() {
-  const headerRow = document.getElementById("header-kolom-row");
-  if (!headerRow) return;
+  const header = document.getElementById("header-tabel");
+  if (!header) return;
 
+  const isMobile = window.innerWidth <= 640;
   const labelNama = ambilLabelNamaKategori(kategoriAktif);
   const isPupuk = kategoriAktif === "Pupuk";
 
-  let html = `
-    <div class="header-kolom-cell col-nama">${escapeHtml(labelNama)}</div>
-    <div class="header-kolom-cell col-ukuran" style="justify-content: center;">Ukuran</div>
+  let thHtml = `
+    <th class="col-nama">${escapeHtml(labelNama)}</th>
+    <th class="col-ukuran">Ukuran</th>
   `;
   if (isPupuk) {
-    html += `<div class="header-kolom-cell col-harga" style="justify-content: flex-end;">Harga Jual <span class="header-ket-biasa">(Rp)</span></div>`;
+    thHtml += `<th class="col-harga">Harga Jual <span class="header-ket-biasa">(Rp)</span></th>`;
   }
   daftarToko.forEach(t => {
-    html += `<div class="header-kolom-cell col-toko" style="justify-content: flex-end;">${escapeHtml(t.nama)} <span class="header-ket-biasa">(Rp)</span></div>`;
+    thHtml += `<th class="col-toko">${escapeHtml(t.nama)} <span class="header-ket-biasa">(Rp)</span></th>`;
   });
-  html += `<div class="header-kolom-cell col-aksi" style="justify-content: center;">Aksi</div>`;
-  headerRow.innerHTML = html;
+  if (!isMobile) {
+    thHtml += `<th class="col-aksi">Aksi</th>`;
+  }
+  header.innerHTML = thHtml;
+  terapkanColgroupSejajar();
 }
 
 function ambilHurufKelompok(namaItem) {
@@ -1203,8 +1198,9 @@ function ambilHurufKelompok(namaItem) {
 function renderIsiTabel() {
   const kataKunci = document.getElementById("cari").value.toLowerCase().trim();
   const hurufPilihan = (document.getElementById("filter-huruf").value || "").toLowerCase();
+  const isMobile = window.innerWidth <= 640;
   const isPupuk = kategoriAktif === "Pupuk";
-  const totalKolom = (isPupuk ? 3 : 2) + daftarToko.length + 1;
+  const totalKolom = (isPupuk ? 2 : 1) + daftarToko.length + (isMobile ? 1 : 2);
 
   let hasil = semuaBarangCache.filter(item => {
     const namaItem = (item.nama || "").trim();
@@ -1238,7 +1234,7 @@ function renderIsiTabel() {
         </td>
       </tr>
     `;
-    requestAnimationFrame(sinkronkanLebarKolomSticky);
+    terapkanColgroupSejajar();
     return;
   }
 
@@ -1267,20 +1263,24 @@ function renderIsiTabel() {
       ? `<td class="col-harga"><strong>${formatAngkaToko(item.hargaJual)}</strong></td>`
       : "";
 
+    const tdAksiHtml = !isMobile
+      ? `<td class="col-aksi" onclick="event.stopPropagation()">
+           <button type="button" class="btn-hapus btn-kecil" onclick="hapusBarang('${escapeHtml(item.id)}')">Hapus</button>
+         </td>`
+      : "";
+
     tbody.innerHTML += `
       <tr class="baris-klik" onclick="bukaDetail('${escapeHtml(item.id)}')">
         <td class="col-nama"><strong>${escapeHtml(item.nama)}</strong></td>
         <td class="col-ukuran">${escapeHtml(ukuranTampil)}</td>
         ${tdHargaJualHtml}
         ${tdTokoHtml}
-        <td class="col-aksi" onclick="event.stopPropagation()">
-          <button type="button" class="btn-hapus btn-kecil" onclick="hapusBarang('${escapeHtml(item.id)}')">Hapus</button>
-        </td>
+        ${tdAksiHtml}
       </tr>
     `;
   });
 
-  requestAnimationFrame(sinkronkanLebarKolomSticky);
+  terapkanColgroupSejajar();
 }
 
 async function tampilkanBarang() {
@@ -1407,7 +1407,7 @@ function tutupDetail() {
   idDetailAktif = null;
   document.getElementById("halaman-detail").style.display = "none";
   document.getElementById("halaman-utama").style.display = "block";
-  requestAnimationFrame(sinkronkanLebarKolomSticky);
+  requestAnimationFrame(terapkanColgroupSejajar);
   fokusKeAtasHalaman();
 }
 
@@ -1731,7 +1731,8 @@ async function inisialisasiAplikasi() {
 }
 
 window.addEventListener("resize", () => {
-  sinkronkanLebarKolomSticky();
+  renderHeaderTabel();
+  renderIsiTabel();
 });
 
 window.addEventListener("online", () => {
